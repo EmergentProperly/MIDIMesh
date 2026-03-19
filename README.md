@@ -17,19 +17,26 @@ Currently, the app has been tested on Android and Debian. However, it should 'ju
 
 Download the APK from the Packages page and install on-device or via ADB.
 
-If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation.
+If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation for your build environment of choice..
 
 
 ## To run out of the box on desktop:
 
 
+On Debian systems, install the dependancies for python-rtmidi:
+
+
+`sudo apt update`
+
+`sudo apt install build-essential libasound2-dev libjack-jackd2-dev`
+
 
 ### Clone the ropository:
 
 
-`git clone https://github.com/EmergentProperly/MIDI_Mesh.git`
+`git clone https://github.com/EmergentProperly/MIDIMesh.git`
 
-`cd /MIDI_Mesh`
+`cd /MIDIMesh`
 
 
 ### Create the environment:
@@ -57,17 +64,17 @@ If you're adventurous, feel free to build for Android using Buildozer (or p4a di
 ## ROADMAP (to 1.0):
 
 
-- Whittle away the God Objects
+- Whittle away the monolithic modules
 
 - Clean up and replace some assets
 
 - Fix emergent bugs
 
-- F-Droid submssion
+- F-Droid submssion (?)
 
-- Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store
+~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ (unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)
 
-- Adhere to semantic versioning, public facing API etc.
+- Look into semantic versioning, public facing API etc.
 
 - 1.0
 
