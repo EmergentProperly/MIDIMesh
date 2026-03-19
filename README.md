@@ -50,7 +50,7 @@ On Debian systems, install the dependancies for python-rtmidi:
 ### Install requirements.txt:
 
 
-`python3 install -r requirements.txt`
+`pip install -r requirements.txt`
 
 
 ### Run:
