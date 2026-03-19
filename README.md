@@ -26,9 +26,9 @@ If you're adventurous, feel free to build for Android using Buildozer (or p4a di
 ### Clone the ropository:
 
 
-`git clone https://github.com/EmergentProperly/MIDI_Mesh`
+`git clone https://github.com/EmergentProperly/MIDIMesh`
 
-`cd /MIDI_Mesh`
+`cd /MIDIMesh`
 
 
 ### Create the environment:
