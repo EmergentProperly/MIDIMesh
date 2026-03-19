@@ -1,8 +1,7 @@
+![MIDI Mesh Logo](data/icon_transparent.png)
+
 # MIDI Mesh
 
-
-
-[MIDI Mesh](assets/help_bg.png)
 
 An open-source, cross-platform MIDI sequencing application. Inspired by mesh networks.
 
@@ -10,11 +9,13 @@ Primarily created for Android, but can be run on desktop with native python (dev
 
 Currently, the app has been tested on Android and Debian. However, it should 'just work' on other platforms (adjust your commands if needed).
 
+![MIDI Mesh](assets/Screenshot.png)
+
 
 ## Android:
 
 
-Download the APK from the releases page and install on-device or via ADB.
+Download the APK from the Packages page and install on-device or via ADB.
 
 If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation.
 
@@ -26,9 +27,9 @@ If you're adventurous, feel free to build for Android using Buildozer (or p4a di
 ### Clone the ropository:
 
 
-`git clone https://github.com/EmergentProperly/MIDIMesh`
+`git clone https://github.com/EmergentProperly/MIDI_Mesh.git`
 
-`cd /MIDIMesh`
+`cd /MIDI_Mesh`
 
 
 ### Create the environment:
@@ -36,7 +37,7 @@ If you're adventurous, feel free to build for Android using Buildozer (or p4a di
 
 `python3 -m venv venv`
 
-`source ./venv/bin/activate`
+`source venv/bin/activate`
 
 
 ### Install requirements.txt:
