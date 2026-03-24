@@ -7,7 +7,7 @@ An open-source, cross-platform MIDI sequencing application. Inspired by mesh net
 
 Primarily created for Android, but can be run on desktop with native python (developed with python version 3.11.9, runs fine with 3.12).
 
-Currently, the app has been tested on Android and Debian. However, it should 'just work' on other platforms (adjust your commands if needed).
+Currently, the app has been tested on Android and Debian. However, I've attempted to provide allowances for it to 'just work' on other platforms (adjust your commands if needed). Please provide feedback if you got it working (or not) on other platforms.
 
 ![MIDI Mesh](assets/Screenshot.png)
 
