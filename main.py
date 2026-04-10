@@ -1,33 +1,41 @@
 '''
                       .,,
-                    l;:;c::                      
-                   ,:o. d.O                      
-                    c:c;c:'                       
-       .c:::c.        0.k                         
-      'o,c'l.k        0.x                        
-      .x'c,c.d,       0.x                        
+                    l;:;c::
+                   ,:o. d.O
+                    c:c;c:'
+       .c:::c.        0.k
+      'o,c'l.k        0.x
+      .x'c,c.d,       0.x
         ;;;:cc:l;     0.d         ;;;;:
-              :l:cc.  O.x        k'c,:'x.               
-                'lc:lcx 0.  .;::c,.o'c;o'         
-                   d:.:,:,cllc:::;c;;;c'           
-                   ,o::.d.x;.                    
-                   lc'loc.O.                         
-              .,'cl;o, ..lc:o,'.                    
-            :cc:c.ll      'x :,::;                    
-            0.l .d,c      ,;o. o.k            
-            :cc;c:o        c;c:c:'          
+              :l:cc.  O.x        k'c,:'x.
+                'lc:lcx 0.  .;::c,.o'c;o'
+                   d:.:,:,cllc:::;c;;;c'
+                   ,o::.d.x;.
+                   lc'loc.O.
+              .,'cl;o, ..lc:o,'.
+            :cc:c.ll      'x :,::;
+            0.l .d,c      ,;o. o.k
+            :cc;c:o        c;c:c:'
               ','            ...
 
-
-
-Copyright © 2026 Emergent Properly
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
 '''
+
+# Copyright (C) 2026 Emergent Properly
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 
 
 from kivy.config import Config
@@ -90,6 +98,7 @@ from misc.grid import Grid
 
 #Mini apps and menus.
 from misc.goodies_menu import GoodiesMenu, SettingsMenu
+from misc.animated_fonts import AnimatedLabel
 from miniapps.blowing_up_shapes import BlowingUpShapesRoot
 from miniapps.growing_trees import GrowingTreesRoot
 from miniapps.growth_ui import GrowingShapesRoot
@@ -728,7 +737,133 @@ class RootLayout(FloatLayout):
             self.play_trigger_button.background_normal = 'assets/play-trigger.png' if is_trigger else 'assets/null.png'
 
 
-#The core logic for the main app (TO DO: move the UI stuff to its own module so only the core logic remains)
+class SelfStrumPopup(FloatLayout):
+    def __init__(self, visualizer, circle, is_merged=False, **kwargs):
+        super().__init__(**kwargs)
+        self.visualizer = visualizer
+        self.circle = circle
+        self.is_merged = is_merged
+        self._content_layout = BoxLayout(orientation='vertical', size_hint=(None, None), size=(1550, 350))
+        self._content_layout.center = (self.width / 2, self.height / 1.3)
+        self.add_widget(self._content_layout)
+
+        with self._content_layout.canvas.before:
+            Color(0.5, 0.5, 0.5, 1)
+            Line(
+                rectangle=(215, 580, 1550, 450),
+                width=2,
+                joint='miter'
+            )
+            Color(0, 0, 0, 0.8)
+            self.bg_rect = Rectangle(pos=(215, 580), size=(1550, 450))
+
+        label = AnimatedLabel(
+            text='Node Timing',
+            font_name='assets/Handwrite-01.ttf',
+            font_size='38px',
+            halign='center',
+            valign='middle',
+            size_hint=(1, 0.3),
+            animation_interval=0.125
+        )
+        self._content_layout.add_widget(label)
+
+        if self.is_merged:
+            self.slider = Slider(
+                min=0,
+                max=100,
+                step=1,
+                background_horizontal='assets/single_slider_bg.png',
+                border_horizontal=(0, 0, 0, 0),
+                background_width=40,
+                value_track_color=(0, 0, 0, 0),
+                cursor_image='assets/node_mini_app.png',
+                cursor_size=(100, 100),
+                padding=40,
+                size_hint=(1, 0.35)
+            )
+            self.slider.bind(value=self._on_strum_slider_change)
+            self.slider.value = self.circle.get('strum_delay_ms', 0)
+
+            self.strum_label = AnimatedLabel(
+                text='Strum (ms):',
+                font_name='assets/Handwrite-01.ttf',
+                font_size='34px',
+                color=(1, 1, 1, 1),
+                halign='right',
+                valign='middle',
+                padding=(0, 60, 0, 0),
+                size_hint=(0.35, 1),
+                animation_interval=0.125
+            )
+
+            self.strum_row = BoxLayout(orientation='horizontal', size_hint=(1, 0.35), spacing=15)
+            self.strum_row.add_widget(self.strum_label)
+            self.strum_row.add_widget(self.slider)
+            self._content_layout.add_widget(self.strum_row)
+
+        self.lag_slider = Slider(
+            min=0,
+            max=50,
+            step=1,
+            background_horizontal='assets/single_slider_bg.png',
+            border_horizontal=(0, 0, 0, 0),
+            background_width=40,
+            value_track_color=(0, 0, 0, 0),
+            cursor_image='assets/node_mini_app.png',
+            cursor_size=(100, 100),
+            padding=40,
+            size_hint=(1, 0.35)
+        )
+        self.lag_slider.bind(value=self._on_lag_slider_change)
+        self.lag_slider.value = self.circle.get('lag_ticks', 0)
+
+        self.lag_label = AnimatedLabel(
+            text='Lag (ticks):',
+            font_name='assets/Handwrite-01.ttf',
+            font_size='34px',
+            color=(1, 1, 1, 1),
+            halign='right',
+            valign='middle',
+            padding=(0, 105, 0, 0) if not self.is_merged else (0, 60, 0, 0),
+            size_hint=(0.35, 1),
+            animation_interval=0.125
+        )
+
+        self.lag_row = BoxLayout(orientation='horizontal', size_hint=(1, 0.35), spacing=15)
+        self.lag_row.add_widget(self.lag_label)
+        self.lag_row.add_widget(self.lag_slider)
+        self._content_layout.add_widget(self.lag_row)
+
+        self.bind(size=self._update_size)
+
+    def _update_size(self, instance, value):
+        self._content_layout.center = (self.width / 2, self.height / 2)
+        if hasattr(self, 'lag_label'):
+            self.lag_label.text = f'Lag (ticks): {self.circle.get("lag_ticks", 0)}'
+        if hasattr(self, 'strum_label'):
+            self.strum_label.text = f'Strum (ms): {int(self.slider.value) if self.is_merged else 0}'
+
+    def _on_strum_slider_change(self, instance, value):
+        if not self.is_merged:
+            return
+        self.circle['strum_delay_ms'] = int(value)
+        if hasattr(self, 'strum_label'):
+            self.strum_label.text = f'Strum (ms): {int(value)}'
+
+    def _on_lag_slider_change(self, instance, value):
+        self.circle['lag_ticks'] = int(value)
+        if hasattr(self, 'lag_label'):
+            self.lag_label.text = f'Lag (ticks): {int(value)}'
+
+    def on_touch_down(self, touch):
+        if self._content_layout.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
+        self.visualizer._hide_strum_popup()
+        return False
+
+
+#The core logic for the main app (TO DO: extract the UI stuff)
 class MidiVisualizer(Widget):
     use_boundaries = BooleanProperty(True)
     _midi_initialized = False
@@ -746,9 +881,15 @@ class MidiVisualizer(Widget):
         self.circle_animations = {}
         self.flash_animation = []
         self.animation_fps = 30.0
+        self.globe_animations = []
+        self.flash_globe_frames = []
         self.load_animations()
         self.midi_in, self.midi_out, self.android_midi = None, None, None
         self.active_notes = {}
+        self.strum_delay_ms = 0
+        self._strum_popup = None
+        self._strum_popup_widget = None
+        self._strum_slider = None
         self.packets = []
         self.packet_life = 10
         self.packet_speed = 200.0
@@ -768,7 +909,7 @@ class MidiVisualizer(Widget):
         self.show_duplicate = self._show_duplicate
         self.last_tempo_change_time = time.time()
         self.committed_ticks = 0
-        self.current_tick_duration = 50.0 / max(self.packet_speed, 1.0)
+        self.current_tick_duration = 50.0 / max(self.packet_speed, 0)
         self.connection_color = Color(0.4, 0.1, 0.0, 1.0)
         self.is_playing = False
         self._just_triggered = False
@@ -900,7 +1041,7 @@ class MidiVisualizer(Widget):
         elif i == 4: return t, p, v
         else: return v, p, q
 
-    # NOTE: "circle" is a remnant of a very early iteration. Non-urgent-TO-DO: change all instances of "circle" to "shape".
+    # NOTE: "circle" is a remnant of a very early iteration. Non-urgent-TO-DO: change all instances of "circle" to "shape" or "node".
 
     def update_circle_color(self, circle):
         if not circle: return
@@ -924,7 +1065,7 @@ class MidiVisualizer(Widget):
         if not circle:
             return
 
-        gap = 4 # (shape padding)
+        gap = 4
         with self.canvas.after:
             self._sel_color_instr = Color(1, 0, 0.3, 0.8) # Red
             self._sel_line_instr = Line(
@@ -969,7 +1110,6 @@ class MidiVisualizer(Widget):
         if not connected_circles: return
         target_circle = random.choice(connected_circles)
         if self.create_packet(start_circle, target_circle, time.time()) is not None:
-            # Notify the overlay
             app = App.get_running_app()
             if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
                 app.guided_tour_overlay.on_packet_created()
@@ -986,6 +1126,19 @@ class MidiVisualizer(Widget):
             if os.path.isdir(path):
                 frames = sorted([os.path.join(path, f) for f in os.listdir(path) if f.endswith('.png')])
                 self.circle_animations[i] = [CoreImage(f).texture for f in frames]
+
+        globe_path = os.path.join(base_path, 'globe')
+        if os.path.isdir(globe_path):
+            frame_files = sorted([f for f in os.listdir(globe_path) if f.lower().endswith('.png')])
+            if frame_files:
+                self.globe_animations = [CoreImage(os.path.join(globe_path, f)).texture for f in frame_files]
+            flash_globe_path = os.path.join(base_path, 'globe_flash')
+            if os.path.isdir(flash_globe_path):
+                flash_files = sorted([f for f in os.listdir(flash_globe_path) if f.lower().endswith('.png')])
+                self.flash_globe_frames = [CoreImage(os.path.join(flash_globe_path, f)).texture for f in flash_files]
+            else:
+                self.flash_globe_frames = self.globe_animations
+
         flash_path = os.path.join(base_path, 'flash')
         if os.path.isdir(flash_path):
             frames = sorted([os.path.join(flash_path, f) for f in os.listdir(flash_path) if f.endswith('.png')])
@@ -1209,6 +1362,79 @@ class MidiVisualizer(Widget):
             self._trigger_shape_reset()
         return circle
 
+    def _merge_circles(self, circles_to_merge, touch):
+        if len(circles_to_merge) < 2: return
+        if not all(c.get('grid_locked', False) for c in circles_to_merge): return
+
+        merged_notes = []
+        max_duration = 0
+        for c in circles_to_merge:
+            if c.get('merged_notes'):
+                merged_notes.extend(c['merged_notes'])
+            else:
+                merged_notes.append((c.get('note', 0), c.get('velocity', 127), c.get('midi_channel', 1)))
+            if c.get('duration', 0) > max_duration:
+                max_duration = c.get('duration', 0)
+
+        src = circles_to_merge[0]
+        merged_circle = {
+            'pos': src['pos'],
+            'size': src['size'],
+            'note': 0,
+            'velocity': 127,
+            'speed': (0, 0),
+            'connections': [],
+            'connection_mode': 0,
+            'duration': max_duration,
+            'flashing': False,
+            'flash_timer': 0.0,
+            'is_flashing_anim': False,
+            'animation_frames': self.globe_animations,
+            'flash_frames': self.flash_animation,
+            'current_frame_index': 0.0,
+            'midi_channel': 1,
+            'movement_enabled': False,
+            'packet_state_a': False,
+            'packet_state_b': False,
+            'grid_locked': True,
+            'play_trigger': False,
+            'lag_ticks': 0,
+            'is_merged': True,
+            'merged_notes': merged_notes,
+            'strum_delay_ms': 0,
+            'id': str(uuid.uuid4())
+        }
+
+        lines_to_remove = []
+        for c1, c2, line in self.connection_data:
+            if c1 in circles_to_merge or c2 in circles_to_merge:
+                lines_to_remove.append((c1, c2, line))
+
+        for c1, c2, line in lines_to_remove:
+            if line in self.canvas.before.children:
+                self.canvas.before.remove(line)
+            if line in self.all_connections:
+                self.all_connections.remove(line)
+            self.connection_data.remove((c1, c2, line))
+
+        for c in circles_to_merge:
+            self._remove_circle(c)
+
+        with self.canvas.after:
+            merged_circle['color_instruction'] = Color(1, 1, 1, 1)
+            texture = self.globe_animations[0] if self.globe_animations else None
+            if texture:
+                merged_circle['rect'] = Rectangle(texture=texture, pos=merged_circle['pos'], size=(merged_circle['size'], merged_circle['size']))
+
+        self.circles.append(merged_circle)
+        self.circle_id_to_circle[merged_circle['id']] = merged_circle
+        self._select_circle(merged_circle)
+        self.show_duplicate(merged_circle)
+
+        return True
+
+
+
     def flash_circle(self, circle):
         if circle['flash_frames']:
             circle['play_animation_once'] = 'flash_frames'
@@ -1252,6 +1478,8 @@ class MidiVisualizer(Widget):
                     cs = root_layout.circle_selector
                     if circle:
                         channel_num = circle.get('midi_channel', 1)
+                        # Use default channel for merged circles if not set
+                        if circle.get('is_merged', False): channel_num = 1
                         cs.channel_image.source = f"assets/shape_{channel_num}.png"
                         cs.current_channel = channel_num
                     else:
@@ -1270,6 +1498,10 @@ class MidiVisualizer(Widget):
         if root_layout:
             root_layout.sync_play_trigger_button(circle)
 
+        if circle and not circle.get('is_merged', False):
+            self.update_circle_color(circle)
+
+
     def _remove_circle(self, circle):
         if circle is self.last_selected_circle:
             self._update_selection_rect(None)
@@ -1282,26 +1514,92 @@ class MidiVisualizer(Widget):
         if '_dup_ref' in circle and circle['_dup_ref'] in self._dup_parent.children:
             self._dup_parent.remove_widget(circle['_dup_ref'])
             self._current_dup = None
+
         for c1, c2, line, in self.connection_data[:]:
             if c1 is circle or c2 is circle:
-                if color in self.canvas.before.children: self.canvas.before.remove(color)
                 if line in self.canvas.before.children: self.canvas.before.remove(line)
-                self.connection_data.remove((c1, c2, line, color))
+                self.connection_data.remove((c1, c2, line))
                 if line in self.all_connections: self.all_connections.remove(line)
+
         if circle in self.circles: self.circles.remove(circle)
         self.circle_id_to_circle.pop(circle.get('id'), None)
 
     def play_circle_note(self, circle):
         if not circle: return
-        self.send_midi_note(circle['note'], circle['velocity'], channel=circle.get('midi_channel'))
-        if circle['duration'] > 0:
-            Clock.schedule_once(
-                lambda dt, n=circle['note'], ch=circle.get('midi_channel'):
-                self.send_midi_note(n, 0, True, ch),
-                circle['duration']
-            )
 
-    def create_packet(self, start_circle, target_circle, creation_time):
+        # Send NOTE ON for all notes in merged circle
+        if circle.get('is_merged', False):
+            merged_notes = circle.get('merged_notes', [])
+            strum_delay_ms = circle.get('strum_delay_ms', 0)
+            strum_delay_sec = strum_delay_ms / 1000.0
+
+            if strum_delay_sec > 0:
+                # Strum Logic: Sequential
+                for i, (note, vel, ch) in enumerate(merged_notes):
+                    delay_time = i * strum_delay_sec
+
+                    # Schedule Note On
+                    Clock.schedule_once(
+                        lambda dt, n=note, v=vel, c=ch:
+                        self.send_midi_note(n, v, channel=c),
+                        delay_time
+                    )
+
+                    # Schedule Note Off (if duration exists)
+                    circle_duration = circle.get('duration', 0)
+                    if circle_duration > 0:
+                        off_delay_time = delay_time + circle_duration
+                        Clock.schedule_once(
+                            lambda dt, n=note, c=ch:
+                            self.send_midi_note(n, 0, True, c),
+                            off_delay_time
+                        )
+            else:
+                # Simultaneous Logic: Original Behavior
+                for note, vel, ch in merged_notes:
+                    self.send_midi_note(note, vel, channel=ch)
+
+                circle_duration = circle.get('duration', 0)
+                if circle_duration > 0:
+                    for note, vel, ch in merged_notes:
+                        Clock.schedule_once(
+                            lambda dt, n=note, ch=ch:
+                            self.send_midi_note(n, 0, True, ch),
+                            circle_duration
+                        )
+        else:
+            # Standard Single Note Logic (PRESERVED)
+            self.send_midi_note(circle['note'], circle['velocity'], channel=circle.get('midi_channel'))
+            if circle['duration'] > 0:
+                Clock.schedule_once(
+                    lambda dt, n=circle['note'], ch=circle.get('midi_channel'):
+                    self.send_midi_note(n, 0, True, ch),
+                    circle['duration']
+                )
+
+
+    def _show_strum_popup(self, circle, is_merged=False):
+        if self._strum_popup_widget:
+            self._hide_strum_popup()
+
+        self._strum_popup_widget = SelfStrumPopup(
+            visualizer=self,
+            circle=circle,
+            is_merged=is_merged,
+            size=(1920, 1080),
+        )
+
+
+        if self.root_layout_ref:
+            self.root_layout_ref.add_widget(self._strum_popup_widget)
+
+    def _hide_strum_popup(self):
+        if self._strum_popup_widget:
+            if self.root_layout_ref and self._strum_popup_widget in self.root_layout_ref.children:
+                self.root_layout_ref.remove_widget(self._strum_popup_widget)
+            self._strum_popup_widget = None
+
+    def create_packet(self, start_circle, target_circle, creation_time, journey_duration_override=None):
         if start_circle is target_circle: return None
         x1, y1 = self.get_circle_center(start_circle)
         x2, y2 = self.get_circle_center(target_circle)
@@ -1312,6 +1610,8 @@ class MidiVisualizer(Widget):
         target_grid_x = int(round(x2 / grid_size))
         target_grid_y = int(round(y2 / grid_size))
         journey_duration_in_ticks = max(abs(target_grid_x - start_grid_x), abs(target_grid_y - start_grid_y))
+        if journey_duration_override is not None:
+            journey_duration_in_ticks = max(0, journey_duration_override) # Ensure not negative
         start_tick = self.master_tick
         arrival_tick = start_tick + journey_duration_in_ticks
         packet = {
@@ -1381,6 +1681,37 @@ class MidiVisualizer(Widget):
     def on_touch_down(self, touch, *args):
 
         if self.collide_point(touch.x, touch.y):
+            if touch.is_double_tap:
+                grid_size = self.grid.grid_size
+                tap_grid_x = int(round(touch.x / grid_size)) * grid_size
+                tap_grid_y = int(round(touch.y / grid_size)) * grid_size
+
+                candidates = []
+                for circle in self.circles:
+                    if not circle.get('grid_locked', False):
+                        continue
+
+                    cx, cy = circle['pos'][0] + circle['size']/2, circle['pos'][1] + circle['size']/2
+                    c_grid_x = int(round(cx / grid_size)) * grid_size
+                    c_grid_y = int(round(cy / grid_size)) * grid_size
+
+                    # Check if circles share the same grid coordinate
+                    if abs(c_grid_x - tap_grid_x) < 1 and abs(c_grid_y - tap_grid_y) < 1:
+                        # Check if touch is actually inside the circle
+                        r = circle['size'] / 2
+                        if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
+                            candidates.append(circle)
+
+                if len(candidates) >= 2:
+                    # Perform merge
+                    if self._merge_circles(candidates, touch):
+                        return True
+                elif len(candidates) == 1:
+                    # Determine if it's a merged circle to show Strum slider
+                    is_merged = candidates[0].get('is_merged', False)
+                    self._show_strum_popup(candidates[0], is_merged)
+                    return True
+
             for c1, c2, line in self.connection_data:
                 if self.is_point_on_line_segment(touch.x, touch.y, *line.points):
                     is_inside_circle = any(
@@ -1391,7 +1722,6 @@ class MidiVisualizer(Widget):
                     )
 
                     if touch.is_double_tap and not is_inside_circle:
-                        # Remove the line graphic
                         if line in self.canvas.before.children:
                             self.canvas.before.remove(line)
                         try:
@@ -1412,7 +1742,6 @@ class MidiVisualizer(Widget):
                 )
                 if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
 
-                    # Ctrl‑click manual connection
                     if self._ctrl_pressed and (not hasattr(touch, 'button') or touch.button == 'left'):
                         if self._last_ctrl_clicked_circle and self._last_ctrl_clicked_circle is not circle:
                             self.create_manual_connection(self._last_ctrl_clicked_circle, circle)
@@ -1607,11 +1936,12 @@ class MidiVisualizer(Widget):
                 circle['speed'], circle['pos'] = (speed_x, speed_y), (new_x, new_y)
 
             one_shot_anim_key = circle.get('play_animation_once')
-
+            active_frames = circle.get('animation_frames')
             if one_shot_anim_key:
-                active_frames = circle.get(one_shot_anim_key)
-            else:
-                active_frames = circle['animation_frames']
+                if circle.get('is_merged', False) and 'flash_globe' in one_shot_anim_key:
+                    active_frames = circle.get('flash_frames', self.globe_animations)
+                else:
+                    active_frames = circle.get(one_shot_anim_key)
 
             if active_frames:
                 circle['current_frame_index'] += self.animation_fps * dt
@@ -2202,3 +2532,4 @@ if __name__ == '__main__':
         app.run()
     except KeyboardInterrupt:
         app.on_stop()
+
