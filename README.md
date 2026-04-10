@@ -72,7 +72,7 @@ On Debian systems, install the dependancies for python-rtmidi:
 
 - F-Droid submssion (?)
 
-- ~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ ~~(unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)~~ Priority is low.
+- ~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ ~~(unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)~~ Priority for both issues is currently low.
 
 - Look into semantic versioning requirements etc...
 
