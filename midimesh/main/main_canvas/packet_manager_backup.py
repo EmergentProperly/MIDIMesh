@@ -101,15 +101,6 @@ def update_packets(visualizer, dt):
 
             is_play_trigger_node = target_circle.get('play_trigger', False)
 
-            lag = target_circle.get('lag_ticks', 0)
-            if lag > 0:
-                if 'trigger_tick' not in packet:
-                    packet['trigger_tick'] = packet['arrival_tick'] + lag
-                if visualizer.master_tick < packet['trigger_tick']:
-
-                    continue
-
-
             if (is_play_trigger_node and visualizer.is_playing and is_last_packet and
                     is_target_a_drop_node and preceding_was_not_respawn_node):
                 visualizer.trigger_all_play_nodes()
@@ -127,49 +118,15 @@ def update_packets(visualizer, dt):
                     new_target = random.choice(potential_targets)
                     visualizer.create_packet(respawn_origin, new_target, current_time)
 
-            notes_to_play = target_circle.get('merged_notes')
-            if notes_to_play:
-                strum_delay_ms = target_circle.get('strum_delay_ms', 0)
-                strum_delay_sec = strum_delay_ms / 1000.0
-
-                if strum_delay_sec <= 0:
-                    for note, vel, ch in notes_to_play:
-                        visualizer.send_midi_note(note, vel, channel=ch)
-
-                    if target_circle['duration'] > 0:
-                        for note, vel, ch in notes_to_play:
-                            Clock.schedule_once(
-                                lambda dt, n=note, ch=ch:
-                                visualizer.send_midi_note(n, 0, True, ch),
-                                target_circle['duration']
-                            )
-                else:
-                    for i, (note, vel, ch) in enumerate(notes_to_play):
-                        delay_time = i * strum_delay_sec
-                        Clock.schedule_once(
-                            lambda dt, n=note, v=vel, c=ch:
-                            visualizer.send_midi_note(n, v, channel=c),
-                            delay_time
-                        )
-                        if target_circle['duration'] > 0:
-                            off_delay_time = delay_time + target_circle['duration']
-                            Clock.schedule_once(
-                                lambda dt, n=note, c=ch:
-                                visualizer.send_midi_note(n, 0, True, c),
-                                off_delay_time
-                            )
-
-                visualizer.flash_circle(target_circle)
-            else:
-                visualizer.send_midi_note(target_circle['note'], target_circle['velocity'],
-                                          channel=target_circle.get('midi_channel'))
-                if target_circle['duration'] > 0:
-                    Clock.schedule_once(
-                        lambda dt, n=target_circle['note'], ch=target_circle.get('midi_channel'):
-                        visualizer.send_midi_note(n, 0, True, ch),
-                        target_circle['duration']
-                    )
-                visualizer.flash_circle(target_circle)
+            visualizer.send_midi_note(target_circle['note'], target_circle['velocity'],
+                                      channel=target_circle.get('midi_channel'))
+            if target_circle['duration'] > 0:
+                Clock.schedule_once(
+                    lambda dt, n=target_circle['note'], ch=target_circle.get('midi_channel'):
+                    visualizer.send_midi_note(n, 0, True, ch),
+                    target_circle['duration']
+                )
+            visualizer.flash_circle(target_circle)
 
             if is_target_a_drop_node:
                 if packet not in packets_to_remove:
@@ -213,13 +170,13 @@ def update_packets(visualizer, dt):
             dx = abs(next_grid_x - target_grid_x)
             dy = abs(next_grid_y - target_grid_y)
 
-            journey_duration = max(dx, dy)
-
-            visualizer.create_packet(target_circle, next_target, current_time, journey_duration_override=journey_duration)
-
-            if packet not in packets_to_remove:
-                packets_to_remove.append(packet)
-                visualizer.active_packet_count -= 1
+            packet['start_circle'] = target_circle
+            packet['target_circle'] = next_target
+            packet['start_tick'] = visualizer.master_tick
+            packet['journey_duration_in_ticks'] = max(dx, dy)
+            packet['arrival_tick'] = visualizer.master_tick + packet['journey_duration_in_ticks']
+            packet['progress'] = 0.0
+            packet['total_distance'] = math.hypot(x2 - x1, y2 - y1) or 1e-3
 
         else:
             x1, y1 = visualizer.get_circle_center(packet['start_circle'])
