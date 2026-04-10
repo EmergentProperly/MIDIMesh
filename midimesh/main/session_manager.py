@@ -18,16 +18,22 @@
             :cc;c:o        c;c:c:'
               ','            ...
 
-
-
-Copyright © 2026 Emergent Properly
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
 '''
+
+# Copyright (C) 2026 Emergent Properly
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
 import json
@@ -240,7 +246,11 @@ def _perform_final_save(visualizer, json_filename, png_filename, base_filename, 
             "packet_state_a": circle.get("packet_state_a", False),
             "packet_state_b": circle.get("packet_state_b", False),
             "grid_locked": circle.get("grid_locked", False),
-            "play_trigger": circle.get("play_trigger", False)
+            "play_trigger": circle.get("play_trigger", False),
+            "is_merged": circle.get("is_merged", False),
+            "merged_notes": circle.get("merged_notes", []),
+            "strum_delay_ms": circle.get("strum_delay_ms", 0),
+            "lag_ticks": circle.get("lag_ticks", 0)
         }
     save_data["circles"] = list(uniq_circles.values())
 
@@ -391,17 +401,30 @@ def load_session_from_file(visualizer, filename):
             circle_id=circle_data["id"],
             midi_channel=circle_data["midi_channel"]
         )
-        circle["pos"] = circle_data["pos"]; circle["size"] = circle_data["size"]
-        circle["speed"] = circle_data["speed"]; circle["duration"] = circle_data["duration"]
-        circle["connection_mode"] = circle_data["connection_mode"]
-        circle["movement_enabled"] = circle_data["movement_enabled"]
-        circle["packet_state_a"] = circle_data.get("packet_state_a", False)
-        circle["packet_state_b"] = circle_data.get("packet_state_b", False)
-        circle["grid_locked"] = circle_data.get("grid_locked", False)
-        circle["play_trigger"] = circle_data.get("play_trigger", False)
-        if circle["grid_locked"]:
-            visualizer.grid.visible = True
-        visualizer.circle_id_to_circle[circle["id"]] = circle
+
+        if circle:
+            circle["pos"] = circle_data["pos"]; circle["size"] = circle_data["size"]
+            circle["speed"] = circle_data["speed"]; circle["duration"] = circle_data["duration"]
+            circle["connection_mode"] = circle_data["connection_mode"]
+            circle["movement_enabled"] = circle_data["movement_enabled"]
+            circle["packet_state_a"] = circle_data.get("packet_state_a", False)
+            circle["packet_state_b"] = circle_data.get("packet_state_b", False)
+            circle["grid_locked"] = circle_data.get("grid_locked", False)
+            circle["play_trigger"] = circle_data.get("play_trigger", False)
+            circle["lag_ticks"] = circle_data.get("lag_ticks", 0)
+
+            if circle_data.get("is_merged", False):
+                circle["is_merged"] = True
+                circle["merged_notes"] = circle_data.get("merged_notes", [])
+                circle["strum_delay_ms"] = circle_data.get("strum_delay_ms", 0)
+                if hasattr(visualizer, 'globe_animations') and visualizer.globe_animations:
+                    circle["animation_frames"] = visualizer.globe_animations
+                    if "rect" in circle:
+                        circle["rect"].texture = visualizer.globe_animations[0]
+
+            if circle["grid_locked"]:
+                visualizer.grid.visible = True
+            visualizer.circle_id_to_circle[circle["id"]] = circle
 
     for conn_data in save_data["connection_data"]:
         circle1 = visualizer.circle_id_to_circle.get(conn_data["circle1_id"])
