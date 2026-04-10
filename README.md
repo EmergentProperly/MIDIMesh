@@ -72,15 +72,15 @@ On Debian systems, install the dependancies for python-rtmidi:
 
 - F-Droid submssion (?)
 
-- ~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ (unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)
+- ~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ ~~(unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)~~ Priority is low.
 
-- Look into semantic versioning, public facing API etc.
+- Look into semantic versioning requirements etc...
 
 - 1.0
 
 - ...
 
-- 2.0 to include inbuilt audio engine (synths, sampling, FX, etc).
+- 2.0 to include inbuilt audio engine (synths, sampling, FX, etc)... possible shift in development towards an open source hardware device.
 
 
 
