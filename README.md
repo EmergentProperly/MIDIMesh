@@ -90,6 +90,6 @@ Please share feedback regarding your experience with the app, and any issues you
 Have fun!
 
 
-## Licensing & Attributions
+## Licensing & Attributions:
 
 This project is licensed under the GNU GPL v3. It utilizes several open-source libraries, including Kivy, Mido, and python-rtmidi. See NOTICES.md for full third-party license details.
