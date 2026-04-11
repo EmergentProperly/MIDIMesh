@@ -362,7 +362,7 @@ class HelpWorld(FloatLayout):
             pos=(925, 666),
             on_release=partial(
                 self.show_generic_help,
-                "NODE:\n\nCreated by playing a note. Note data such as octave,\nnote length, and velocity are stored with the node."
+                "NODE:\n\nCreated by playing a note. Stores MIDI note data (octave,\nnote length, velocity...). Double-tap accesses node timing."
                 "\n\nThe node's colour reflects the MIDI Channel the\nnode is set to."
                 "\n\nWARNING: When the system becomes overloaded with\nnodes, the system will dismantle itself.",
                 (810, 540),
@@ -372,6 +372,28 @@ class HelpWorld(FloatLayout):
         )
         self.add_widget(self.btn_node)
         self.menu_buttons.append(self.btn_node)
+
+        self.group_node = Button(
+            text="?",
+            font_size=60,
+            font_name=ANIM_FONTS[0],
+            color=(1, 1, 1, 1),
+            background_color=(0, 0, 0, 0),
+            background_normal='',
+            size_hint=(None, None),
+            size=(100, 100),
+            pos=(540, 666),
+            on_release=partial(
+                self.show_generic_help,
+                "GROUP NODE:\n\nStack nodes on the grid and double-tap them to create\na group node.\n\n"
+                "Additional double-taps access node timing.",
+                (450, 540),
+                90,
+                (160, 10)
+            )
+        )
+        self.add_widget(self.group_node)
+        self.menu_buttons.append(self.group_node)
 
         self.btn_keys = Button(
             text="?",
