@@ -6,6 +6,7 @@ This application incorporates the following open-source libraries:
 - **License:** MIT
 - **Project:** https://github.com/kivy/kivy
 - **Notice:** 
+
 MIT License
 
 Copyright (c) 2010-2025 Kivy Team and other contributors
@@ -32,6 +33,7 @@ THE SOFTWARE.
 - **License:** MIT
 - **Project:** https://spotlightkid.github.io/python-rtmidi/
 - **Notice:** 
+
 python-rtmidi was written by Christopher Arndt, 2012 - 2023.
 
 The software is released unter the MIT License:
