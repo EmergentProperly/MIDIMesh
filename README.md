@@ -83,10 +83,13 @@ On Debian systems, install the dependancies for python-rtmidi:
 - 2.0 to include inbuilt audio engine (synths, sampling, FX, etc)... possible shift in development towards an open source hardware device.
 
 
-
 ## Feedback:
-
 
 Please share feedback regarding your experience with the app, and any issues you may have faced. I want this to be an awesome tool for creatives, so all rational feedback and/or feature requests will be considered carefully and appreciated.
 
 Have fun!
+
+
+## Licensing & Attributions
+
+This project is licensed under the GNU GPL v3. It utilizes several open-source libraries, including Kivy, Mido, and python-rtmidi. See NOTICES.md for full third-party license details.
