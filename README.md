@@ -31,7 +31,7 @@ On Debian systems, install the dependancies for python-rtmidi:
 `sudo apt install build-essential libasound2-dev libjack-jackd2-dev`
 
 
-### Clone the ropository:
+### Clone the repository:
 
 
 `git clone https://github.com/EmergentProperly/MIDIMesh.git`
