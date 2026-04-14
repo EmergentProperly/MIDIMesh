@@ -369,27 +369,38 @@ class MidiDeviceSelectorPopup(BaseFullLayoutPopup):
         self.add_content_widget(main_layout)
 
     def populate_device_list(self):
-        self.list_layout.clear_widgets()
-        if not self.current_device_list:
-            lbl = Label(text="No devices found.\nCheck connections or Refresh.", font_size=FONT_SIZE_BODY, size_hint_y=None, height=200)
-            self.list_layout.add_widget(lbl)
-            return
-        for name, device_obj in self.current_device_list:
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=ROW_HEIGHT)
-            lbl_anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=0.85, padding=[20, 0, 0, 0])
-            lbl = Label(text=name, font_size=FONT_SIZE_BODY, size_hint=(1, None), height=ROW_HEIGHT, halign='left', valign='middle')
-            lbl.bind(size=lbl.setter('text_size'))
-            lbl_anchor.add_widget(lbl)
-            chk_container = AnchorLayout(size_hint_x=0.15, anchor_x='center', anchor_y='center', padding=[0, 15, 0, 0])
-            chk = BigCheckBox()
-            chk.device_obj = device_obj
-            if device_obj.getId() in self.connected_ids:
-                chk.active = True
-            chk.bind(active=self._on_checkbox_active)
-            chk_container.add_widget(chk)
-            row.add_widget(lbl_anchor)
-            row.add_widget(chk_container)
-            self.list_layout.add_widget(row)
+        try:
+            self.list_layout.clear_widgets()
+            if not self.current_device_list:
+                lbl = Label(text="No devices found.\nCheck connections or Refresh.", font_size=FONT_SIZE_BODY, size_hint_y=None, height=200)
+                self.list_layout.add_widget(lbl)
+                return
+            for name, device_obj in self.current_device_list:
+                if name is None:
+                    name = "Unknown MIDI Device"
+                    logging.warning("Guided Popups: Device name was None, replaced with generic label.")
+
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=ROW_HEIGHT)
+                lbl_anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=0.85, padding=[20, 0, 0, 0])
+                lbl = Label(text=str(name), font_size=FONT_SIZE_BODY, size_hint=(1, None), height=ROW_HEIGHT, halign='left', valign='middle')
+                lbl.bind(size=lbl.setter('text_size'))
+                lbl_anchor.add_widget(lbl)
+
+                chk_container = AnchorLayout(size_hint_x=0.15, anchor_x='center', anchor_y='center', padding=[0, 15, 0, 0])
+                chk = BigCheckBox()
+                chk.device_obj = device_obj
+                if device_obj.getId() in self.connected_ids:
+                    chk.active = True
+                chk.bind(active=self._on_checkbox_active)
+                chk_container.add_widget(chk)
+                row.add_widget(lbl_anchor)
+                row.add_widget(chk_container)
+                self.list_layout.add_widget(row)
+        except Exception as e:
+            logging.error(f"Guided Popups: Error populating device list: {e}")
+            self.list_layout.clear_widgets()
+            error_lbl = Label(text="Error loading devices. Please refresh.", font_size=FONT_SIZE_BODY, color=(1, 0, 0, 1))
+            self.list_layout.add_widget(error_lbl)
 
     def refresh_list(self, instance):
         logging.info("Guided Popups: Refreshing device list...")
