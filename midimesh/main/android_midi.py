@@ -193,7 +193,20 @@ else:
                 for device_info in all_devices:
                     try:
                         device_type = device_info.getType()
+                        device_id = device_info.getId()
+
+                        # Sane Device Name Retrieval
                         device_name = device_info.getProperties().getString('name')
+
+                        if device_name is None or device_name == "":
+                            device_name = device_info.getProperties().getString('product')
+
+                        if device_name is None or device_name == "":
+                            device_name = device_info.getProperties().getString('manufacturer')
+
+                        if device_name is None or device_name == "":
+                            device_name = f"MIDI Device {device_id}" # Fallback to ID
+
                         input_ports = device_info.getInputPortCount()
 
                         output_ports = device_info.getOutputPortCount()
