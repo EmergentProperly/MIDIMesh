@@ -350,7 +350,7 @@ class SettingsMenu(FitLayout):
             size_hint=(1, None),
             height=80
         )
-        btn_source.bind(on_release=lambda x: webbrowser.open("https://github.com/EmergentProperly/MIDI_Mesh"))
+        btn_source.bind(on_release=lambda x: webbrowser.open("https://github.com/EmergentProperly/MIDIMesh"))
         content_layout.add_widget(btn_source)
 
         btn_tuts = Button(
@@ -372,7 +372,7 @@ class SettingsMenu(FitLayout):
             size_hint=(1, None),
             height=80
         )
-        btn_bug.bind(on_release=lambda x: webbrowser.open("https://github.com/EmergentProperly/MIDI_Mesh"))
+        btn_bug.bind(on_release=lambda x: webbrowser.open("https://github.com/EmergentProperly/MIDIMesh/issues"))
         content_layout.add_widget(btn_bug)
 
         btn_back = Button(
