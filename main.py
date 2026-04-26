@@ -39,7 +39,7 @@
 
 
 from kivy.config import Config
-Config.set('input', 'mouse', 'mouse,disable_multitouch') #<-- Comment this out if you want to use pseudo-multitouch on a desktop (kivy red dots)
+Config.set('input', 'mouse', 'mouse,disable_multitouch') #<-- Comment this out for Android build or if you want to use pseudo-multitouch on a desktop (kivy red dots)
 
 import os
 import logging
@@ -874,6 +874,7 @@ class MidiVisualizer(Widget):
         self.root_layout_ref = None
         self.current_save_index = 0
         self.circle_id_to_circle = {}
+        self.circle_inheritance_defaults = {}
         self.all_connections = []
         self.connection_data = []
         self.circles = []
@@ -1318,12 +1319,14 @@ class MidiVisualizer(Widget):
         connection_mode = 0
         packet_state_a = False
         packet_state_b = False
+        movement_enabled = True
 
-        if self.last_selected_circle:
-            is_grid_locked = self.last_selected_circle.get('grid_locked', False)
-            connection_mode = self.last_selected_circle.get('connection_mode', 0)
-            packet_state_a = self.last_selected_circle.get('packet_state_a', False)
-            packet_state_b = self.last_selected_circle.get('packet_state_b', False)
+        if self.circle_inheritance_defaults:
+            is_grid_locked = self.circle_inheritance_defaults.get('grid_locked', False)
+            movement_enabled = self.circle_inheritance_defaults.get('movement_enabled', True)
+            connection_mode = self.circle_inheritance_defaults.get('connection_mode', 0)
+            packet_state_a = self.circle_inheritance_defaults.get('packet_state_a', False)
+            packet_state_b = self.circle_inheritance_defaults.get('packet_state_b', False)
 
         final_midi_channel = midi_channel if midi_channel is not None else midi_manager.MIDI_CHANNEL
         circle = {
@@ -1333,7 +1336,7 @@ class MidiVisualizer(Widget):
             'duration': 0, 'flashing': False, 'flash_timer': 0.0, 'is_flashing_anim': False,
             'animation_frames': animation_frames, 'flash_frames': self.flash_animation,
             'current_frame_index': 0.0, 'midi_channel': final_midi_channel,
-            'movement_enabled': not is_grid_locked,
+            'movement_enabled': movement_enabled if not is_grid_locked else False,
             'packet_state_a': packet_state_a,
             'packet_state_b': packet_state_b,
             'grid_locked': is_grid_locked,
@@ -1450,6 +1453,8 @@ class MidiVisualizer(Widget):
                     self.canvas.before.remove(line)
                     self.connection_data.remove((c1, c2, line))
                     self.all_connections.remove(line)
+        if self.last_selected_circle:
+            self.circle_inheritance_defaults['connection_mode'] = mode
 
     def _unlock_connections(self, circle):
         for c1, c2, line, in self.connection_data[:]:
@@ -1478,7 +1483,6 @@ class MidiVisualizer(Widget):
                     cs = root_layout.circle_selector
                     if circle:
                         channel_num = circle.get('midi_channel', 1)
-                        # Use default channel for merged circles if not set
                         if circle.get('is_merged', False): channel_num = 1
                         cs.channel_image.source = f"assets/shape_{channel_num}.png"
                         cs.current_channel = channel_num
@@ -1534,18 +1538,13 @@ class MidiVisualizer(Widget):
             strum_delay_sec = strum_delay_ms / 1000.0
 
             if strum_delay_sec > 0:
-                # Strum Logic: Sequential
                 for i, (note, vel, ch) in enumerate(merged_notes):
                     delay_time = i * strum_delay_sec
-
-                    # Schedule Note On
                     Clock.schedule_once(
                         lambda dt, n=note, v=vel, c=ch:
                         self.send_midi_note(n, v, channel=c),
                         delay_time
                     )
-
-                    # Schedule Note Off (if duration exists)
                     circle_duration = circle.get('duration', 0)
                     if circle_duration > 0:
                         off_delay_time = delay_time + circle_duration
@@ -1555,7 +1554,6 @@ class MidiVisualizer(Widget):
                             off_delay_time
                         )
             else:
-                # Simultaneous Logic: Original Behavior
                 for note, vel, ch in merged_notes:
                     self.send_midi_note(note, vel, channel=ch)
 
@@ -1568,7 +1566,6 @@ class MidiVisualizer(Widget):
                             circle_duration
                         )
         else:
-            # Standard Single Note Logic (PRESERVED)
             self.send_midi_note(circle['note'], circle['velocity'], channel=circle.get('midi_channel'))
             if circle['duration'] > 0:
                 Clock.schedule_once(
@@ -1847,8 +1844,13 @@ class MidiVisualizer(Widget):
         is_locked = not circle.get('grid_locked', False)
         circle['grid_locked'] = is_locked
         self.grid.visible = is_locked
-        circle['movement_enabled'] = not is_locked
+        circle['movement_enabled'] = False if is_locked else not is_locked
         if is_locked: self._snap_circle_to_grid(circle)
+        self.circle_inheritance_defaults['grid_locked'] = is_locked
+        self.circle_inheritance_defaults['movement_enabled'] = False if is_locked else not is_locked
+        if hasattr(self, 'root_layout_ref') and self.root_layout_ref:
+            if hasattr(self.root_layout_ref, 'misccontrols'):
+                self.root_layout_ref.misccontrols._sync_button_with_circle(circle)
 
         app = App.get_running_app()
         if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
@@ -1917,7 +1919,8 @@ class MidiVisualizer(Widget):
         self.update_packets(dt)
 
         for circle in self.circles[:]:
-            if circle.get('movement_enabled', True):
+            is_moving = circle.get('movement_enabled', True) and not circle.get('grid_locked', False)
+            if is_moving:
                 x, y, (speed_x, speed_y), size = *circle['pos'], circle['speed'], circle['size']
                 new_x, new_y = x + speed_x * self.node_speed_multiplier, y + speed_y * self.node_speed_multiplier
                 if new_x <= 0 or new_x + size >= self.width: speed_x *= -1; new_x = max(0, min(new_x, self.width - size))
