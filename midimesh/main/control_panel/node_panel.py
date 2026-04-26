@@ -378,13 +378,19 @@ class MiscControls(FloatLayout):
         if button is self.button_a:
             if self.visualizer.last_selected_circle:
                 self.visualizer.last_selected_circle['packet_state_a'] = toggled
+            self.visualizer.circle_inheritance_defaults['packet_state_a'] = toggled
         elif button is self.button_b:
             if self.visualizer.last_selected_circle:
                 self.visualizer.last_selected_circle['packet_state_b'] = toggled
+            self.visualizer.circle_inheritance_defaults['packet_state_b'] = toggled
 
     def set_connection_mode(self, mode):
         if self.visualizer:
             self.visualizer.set_last_circle_connection_mode(mode)
+            if self.visualizer.last_selected_circle:
+                self.visualizer.circle_inheritance_defaults['connection_mode'] = mode
+                if hasattr(self.visualizer.last_selected_circle, 'grid_locked'):
+                    self._sync_button_with_circle(self.visualizer.last_selected_circle)
 
     def sync_connection_mode_button(self, circle):
         if not circle:
@@ -402,19 +408,29 @@ class MiscControls(FloatLayout):
             self.movement_btn.toggled = False
             self.movement_btn.source = self.movement_btn.off_src
             return
-
-        enabled = circle.get('movement_enabled', True)
-        self.movement_btn.toggled = enabled
+        grid_locked = circle.get('grid_locked', False)
+        actual_movement_state = circle.get('movement_enabled', True)
+        if grid_locked:
+            final_state = False
+        else:
+            final_state = actual_movement_state
+        self.movement_btn.toggled = final_state
         self.movement_btn.source = (
-            self.movement_btn.on_src if enabled else self.movement_btn.off_src
+            self.movement_btn.on_src if final_state else self.movement_btn.off_src
         )
 
     def toggle_movement(self):
         circ = self.visualizer.last_selected_circle
         if not circ:
             return
-
-        circ['movement_enabled'] = not circ.get('movement_enabled', True)
+        if circ.get('grid_locked', False):
+            self.movement_btn.toggled = True
+            self.movement_btn.source = self.movement_btn.on_src
+            Clock.schedule_once(lambda dt: self._sync_button_with_circle(self.visualizer.last_selected_circle), 0.3)
+            return
+        new_enabled = not circ.get('movement_enabled', True)
+        circ['movement_enabled'] = new_enabled
+        self.visualizer.circle_inheritance_defaults['movement_enabled'] = new_enabled
         self._sync_button_with_circle(circ)
 
     def delete_last_selected_circle(self):
@@ -676,6 +692,7 @@ class CircleMidiChannelSelector(FloatLayout):
         if viz:
             if getattr(viz, 'last_selected_circle', None):
                 viz.last_selected_circle['midi_channel'] = self.current_channel
+                viz.circle_inheritance_defaults['midi_channel'] = self.current_channel
                 if hasattr(viz, 'update_circle_color'):
                     viz.update_circle_color(viz.last_selected_circle)
             else:
