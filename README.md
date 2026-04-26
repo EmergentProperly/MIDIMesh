@@ -66,7 +66,7 @@ On Debian systems, install the dependancies for python-rtmidi:
 
 - Whittle away the monolithic modules
 
-- Clean up and replace some assets
+- Clean up and replace some assets and improve usability
 
 - Fix emergent bugs
 
