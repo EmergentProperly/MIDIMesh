@@ -786,7 +786,7 @@ class SelfStrumPopup(FloatLayout):
             self.slider.value = self.circle.get('strum_delay_ms', 0)
 
             self.strum_label = AnimatedLabel(
-                text='Strum (ms):',
+                text=f'Strum (ms): {int(self.circle.get("strum_delay_ms", 0))}',
                 font_name='assets/Handwrite-01.ttf',
                 font_size='34px',
                 color=(1, 1, 1, 1),
@@ -819,7 +819,7 @@ class SelfStrumPopup(FloatLayout):
         self.lag_slider.value = self.circle.get('lag_ticks', 0)
 
         self.lag_label = AnimatedLabel(
-            text='Lag (ticks):',
+            text=f'Lag (ticks): {self.circle.get("lag_ticks", 0)}',
             font_name='assets/Handwrite-01.ttf',
             font_size='34px',
             color=(1, 1, 1, 1),
@@ -869,6 +869,9 @@ class MidiVisualizer(Widget):
     _midi_initialized = False
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._copy_source_circle = None
+        self._copy_touch_id = None
+        self._pc_copy_circle = None
         self.control_panel_ref = None
         self.misc_controls_ref = None
         self.root_layout_ref = None
@@ -1365,6 +1368,63 @@ class MidiVisualizer(Widget):
             self._trigger_shape_reset()
         return circle
 
+    def copy_circle(self, source_circle, new_pos):
+        is_merged = source_circle.get('is_merged', False)
+
+        circle_data = {
+            'pos': new_pos,
+            'size': source_circle['size'],
+            'note': source_circle['note'],
+            'velocity': source_circle['velocity'],
+            'speed': source_circle['speed'],
+            'connections': [],
+            'connection_mode': source_circle['connection_mode'],
+            'duration': source_circle['duration'],
+            'flashing': False,
+            'flash_timer': 0.0,
+            'is_flashing_anim': False,
+            'animation_frames': source_circle['animation_frames'],
+            'flash_frames': source_circle['flash_frames'],
+            'current_frame_index': 0.0,
+            'midi_channel': source_circle['midi_channel'],
+            'movement_enabled': source_circle['movement_enabled'],
+            'packet_state_a': source_circle['packet_state_a'],
+            'packet_state_b': source_circle['packet_state_b'],
+            'grid_locked': source_circle['grid_locked'],
+            'play_trigger': source_circle['play_trigger'],
+            'id': str(uuid.uuid4())
+        }
+
+        if is_merged:
+            circle_data['is_merged'] = True
+            circle_data['merged_notes'] = source_circle['merged_notes']
+            circle_data['strum_delay_ms'] = source_circle['strum_delay_ms']
+            circle_data['lag_ticks'] = source_circle['lag_ticks']
+            circle_data['animation_frames'] = self.globe_animations if hasattr(self, 'globe_animations') and self.globe_animations else source_circle['animation_frames']
+        if circle_data['grid_locked']:
+            grid_size = getattr(self, 'grid', None)
+            if grid_size:
+                grid_size = grid_size.grid_size
+                cx, cy = new_pos[0] + circle_data['size']/2, new_pos[1] + circle_data['size']/2
+                snapped_cx, snapped_cy = round(cx / grid_size) * grid_size, round(cy / grid_size) * grid_size
+                nx = max(0, min(snapped_cx - circle_data['size']/2, self.width - circle_data['size']))
+                ny = max(0, min(snapped_cy - circle_data['size']/2, self.height - circle_data['size']))
+                circle_data['pos'] = (nx, ny)
+        h, s, v = self._get_color_for_channel(circle_data['midi_channel'])
+        with self.canvas.after:
+            circle_data['color_instruction'] = Color(h, s, v, mode='hsv')
+            circle_data['rect'] = Rectangle(texture=circle_data['animation_frames'][0], pos=circle_data['pos'], size=(circle_data['size'], circle_data['size']))
+        self.circles.append(circle_data)
+        self.circle_id_to_circle[circle_data['id']] = circle_data
+        self.show_duplicate(circle_data)
+        self._select_circle(circle_data)
+
+        app = App.get_running_app()
+        if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
+            app.guided_tour_overlay.on_shape_created()
+
+        return circle_data
+
     def _merge_circles(self, circles_to_merge, touch):
         if len(circles_to_merge) < 2: return
         if not all(c.get('grid_locked', False) for c in circles_to_merge): return
@@ -1655,6 +1715,7 @@ class MidiVisualizer(Widget):
         if key in (305, 306):
             self._ctrl_pressed = False
             self._last_ctrl_clicked_circle = None
+            self._pc_copy_circle = None
 
     def create_manual_connection(self, c1, c2):
         if not c1 or not c2 or c1 is c2:
@@ -1676,7 +1737,6 @@ class MidiVisualizer(Widget):
             self.all_connections.append(connection_line)
 
     def on_touch_down(self, touch, *args):
-
         if self.collide_point(touch.x, touch.y):
             if touch.is_double_tap:
                 grid_size = self.grid.grid_size
@@ -1692,19 +1752,15 @@ class MidiVisualizer(Widget):
                     c_grid_x = int(round(cx / grid_size)) * grid_size
                     c_grid_y = int(round(cy / grid_size)) * grid_size
 
-                    # Check if circles share the same grid coordinate
                     if abs(c_grid_x - tap_grid_x) < 1 and abs(c_grid_y - tap_grid_y) < 1:
-                        # Check if touch is actually inside the circle
                         r = circle['size'] / 2
                         if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
                             candidates.append(circle)
 
                 if len(candidates) >= 2:
-                    # Perform merge
                     if self._merge_circles(candidates, touch):
                         return True
                 elif len(candidates) == 1:
-                    # Determine if it's a merged circle to show Strum slider
                     is_merged = candidates[0].get('is_merged', False)
                     self._show_strum_popup(candidates[0], is_merged)
                     return True
@@ -1731,6 +1787,7 @@ class MidiVisualizer(Widget):
 
                         return True
 
+            touch_on_circle = False
             for circle in reversed(self.circles):
                 cx, cy, r = (
                     circle['pos'][0] + circle['size'] / 2,
@@ -1738,12 +1795,18 @@ class MidiVisualizer(Widget):
                     circle['size'] / 2,
                 )
                 if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
+                    touch_on_circle = True
+
+                    if self._ctrl_pressed:
+                        self._pc_copy_circle = circle
+                    elif not self._copy_source_circle:
+                        self._copy_source_circle = circle
+                        self._copy_touch_id = touch.id
 
                     if self._ctrl_pressed and (not hasattr(touch, 'button') or touch.button == 'left'):
                         if self._last_ctrl_clicked_circle and self._last_ctrl_clicked_circle is not circle:
                             self.create_manual_connection(self._last_ctrl_clicked_circle, circle)
                         self._last_ctrl_clicked_circle = circle
-                        return True
 
                     self.active_touches[touch.id] = circle
                     other_touched_circles = [
@@ -1763,6 +1826,20 @@ class MidiVisualizer(Widget):
                     self._drag_offset = (touch.x - cx, touch.y - cy)
                     self._select_circle(circle)
                     self.show_duplicate(circle)
+                    return True
+
+            if not touch_on_circle:
+                if self._copy_source_circle and touch.id != self._copy_touch_id:
+                    new_pos = (touch.x - self._copy_source_circle['size']/2, touch.y - self._copy_source_circle['size']/2)
+                    self.copy_circle(self._copy_source_circle, new_pos)
+                    self._copy_source_circle = None
+                    self._copy_touch_id = None
+                    return True
+
+                if self._ctrl_pressed and self._pc_copy_circle:
+                    new_pos = (touch.x - self._pc_copy_circle['size']/2, touch.y - self._pc_copy_circle['size']/2)
+                    self.copy_circle(self._pc_copy_circle, new_pos)
+                    self._pc_copy_circle = None
                     return True
 
         touch.ud['mv_bg_tap'] = True
@@ -1795,20 +1872,20 @@ class MidiVisualizer(Widget):
 
     def on_touch_up(self, touch, *args):
         self.active_touches.pop(touch.id, None)
-
+        if touch.id == self._copy_touch_id:
+            self._copy_source_circle = None
+            self._copy_touch_id = None
         if self._dragged_circle:
             if self._dragged_circle.get('grid_locked', False): self._snap_circle_to_grid(self._dragged_circle)
             self._dragged_circle = None
             return True
         self._candidate_circle = None
-
         if touch.ud.get('mv_bg_tap'):
             dx = touch.x - touch.opos[0]
             dy = touch.y - touch.opos[1]
 
             if math.hypot(dx, dy) < 10:
                 self._select_circle(None)
-
         return super().on_touch_up(touch, *args)
 
     def _on_duplicate_touch_down(self, instance, touch):
