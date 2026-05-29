@@ -758,7 +758,7 @@ class SelfStrumPopup(FloatLayout):
             self.bg_rect = Rectangle(pos=(215, 580), size=(1550, 450))
 
         label = AnimatedLabel(
-            text='Node Timing',
+            text='Node Timing and Packet Routing',
             font_name='assets/Handwrite-01.ttf',
             font_size='38px',
             halign='center',
@@ -770,9 +770,7 @@ class SelfStrumPopup(FloatLayout):
 
         if self.is_merged:
             self.slider = Slider(
-                min=0,
-                max=100,
-                step=1,
+                min=0, max=100, step=1,
                 background_horizontal='assets/single_slider_bg.png',
                 border_horizontal=(0, 0, 0, 0),
                 background_width=40,
@@ -803,9 +801,7 @@ class SelfStrumPopup(FloatLayout):
             self._content_layout.add_widget(self.strum_row)
 
         self.lag_slider = Slider(
-            min=0,
-            max=50,
-            step=1,
+            min=0, max=50, step=1,
             background_horizontal='assets/single_slider_bg.png',
             border_horizontal=(0, 0, 0, 0),
             background_width=40,
@@ -835,6 +831,45 @@ class SelfStrumPopup(FloatLayout):
         self.lag_row.add_widget(self.lag_slider)
         self._content_layout.add_widget(self.lag_row)
 
+        # NEW: Connection Routing Slider (ONLY shown for locked nodes)
+        if self.circle.get('connection_mode', 0) == 1:
+            conns = self.visualizer.get_connected_circles(self.circle)
+            max_conns = len(conns)
+            if max_conns > 0:
+                init_val = self.circle.get('locked_connection_index', 0)
+                init_val = max(0, min(init_val, max_conns))
+
+                self.conn_slider = Slider(
+                    min=0, max=max_conns, step=1,
+                    background_horizontal='assets/single_slider_bg.png',
+                    border_horizontal=(0, 0, 0, 0),
+                    background_width=40,
+                    value_track_color=(0, 0, 0, 0),
+                    cursor_image='assets/node_mini_app.png',
+                    cursor_size=(100, 100),
+                    padding=40,
+                    size_hint=(1, 0.35)
+                )
+                self.conn_slider.bind(value=self._on_conn_slider_change)
+                self.conn_slider.value = init_val
+
+                self.conn_label = AnimatedLabel(
+                    text=f'Conn (1-{max_conns}): {init_val if init_val > 0 else "R"}',
+                    font_name='assets/Handwrite-01.ttf',
+                    font_size='34px',
+                    color=(1, 1, 1, 1),
+                    halign='right',
+                    valign='middle',
+                    padding=(0, 60, 0, 0),
+                    size_hint=(0.35, 1),
+                    animation_interval=0.125
+                )
+
+                self.conn_row = BoxLayout(orientation='horizontal', size_hint=(1, 0.35), spacing=15)
+                self.conn_row.add_widget(self.conn_label)
+                self.conn_row.add_widget(self.conn_slider)
+                self._content_layout.add_widget(self.conn_row)
+
         self.bind(size=self._update_size)
 
     def _update_size(self, instance, value):
@@ -843,6 +878,10 @@ class SelfStrumPopup(FloatLayout):
             self.lag_label.text = f'Lag (ticks): {self.circle.get("lag_ticks", 0)}'
         if hasattr(self, 'strum_label'):
             self.strum_label.text = f'Strum (ms): {int(self.slider.value) if self.is_merged else 0}'
+        if hasattr(self, 'conn_label') and hasattr(self, 'conn_slider'):
+            max_c = len(self.visualizer.get_connected_circles(self.circle))
+            val = int(self.conn_slider.value)
+            self.conn_label.text = f'Conn (1-{max_c}): {val if val > 0 else "R"}'
 
     def _on_strum_slider_change(self, instance, value):
         if not self.is_merged:
@@ -856,11 +895,21 @@ class SelfStrumPopup(FloatLayout):
         if hasattr(self, 'lag_label'):
             self.lag_label.text = f'Lag (ticks): {int(value)}'
 
+    def _on_conn_slider_change(self, instance, value):
+        self.circle['locked_connection_index'] = int(value)
+        if hasattr(self, 'conn_label'):
+            max_c = len(self.visualizer.get_connected_circles(self.circle))
+            val = int(value)
+            self.conn_label.text = f'Conn (1-{max_c}): {val if val > 0 else "R"}'
+
     def on_touch_down(self, touch):
         if self._content_layout.collide_point(*touch.pos):
             return super().on_touch_down(touch)
         self.visualizer._hide_strum_popup()
         return False
+
+
+
 
 
 #The core logic for the main app (TO DO: extract the UI stuff)
@@ -1106,17 +1155,42 @@ class MidiVisualizer(Widget):
             elif c2 is circle: connected.append(c1)
         return connected
 
+    def _get_next_target(self, current_node, previous_node=None):
+        connected = self.get_connected_circles(current_node)
+        if not connected:
+            return None
+
+        # Stable ordering by position so index 1,2,3... always maps to the same physical node
+        connected_sorted = sorted(connected, key=lambda c: (c['pos'][0], c['pos'][1]))
+        total_connections = len(connected_sorted)
+
+        locked_idx = current_node.get('locked_connection_index', 0)
+
+        if locked_idx > 0 and current_node.get('connection_mode', 0) == 1:
+            # Locked mode: ignore previous node filter, map index directly
+            target_idx = (locked_idx - 1) % total_connections
+            return connected_sorted[target_idx]
+        else:
+            # Random mode: exclude previous node to prevent immediate backtracking
+            potential = [c for c in connected_sorted if c is not previous_node]
+            return random.choice(potential) if potential else connected_sorted[0]
+
+
     def trigger_packet_routing(self, start_circle, play_note=True):
         if play_note:
             self.play_circle_note(start_circle)
         self.flash_circle(start_circle)
         connected_circles = self.get_connected_circles(start_circle)
-        if not connected_circles: return
-        target_circle = random.choice(connected_circles)
+        if not connected_circles:
+            return
+
+        target_circle = self._get_next_target(start_circle, previous_node=start_circle)
+
         if self.create_packet(start_circle, target_circle, time.time()) is not None:
             app = App.get_running_app()
             if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
                 app.guided_tour_overlay.on_packet_created()
+
 
 
     def trigger_all_play_nodes(self):

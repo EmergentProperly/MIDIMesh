@@ -17,7 +17,6 @@
             0.l .d,c      ,;o. o.k
             :cc;c:o        c;c:c:'
               ','            ...
-
 '''
 
 # Copyright (C) 2026 Emergent Properly
@@ -39,6 +38,23 @@ import time
 import math
 import random
 from kivy.clock import Clock
+
+def _resolve_next_target(current_node, previous_node, visualizer):
+    connected = visualizer.get_connected_circles(current_node)
+    if not connected:
+        return None
+
+    connected_sorted = sorted(connected, key=lambda c: (c['pos'][0], c['pos'][1]))
+    total_connections = len(connected_sorted)
+
+    locked_idx = current_node.get('locked_connection_index', 0)
+
+    if locked_idx > 0 and current_node.get('connection_mode', 0) == 1:
+        target_idx = (locked_idx - 1) % total_connections
+        return connected_sorted[target_idx]
+    else:
+        potential = [c for c in connected_sorted if c is not previous_node]
+        return random.choice(potential) if potential else connected_sorted[0]
 
 def update_packets(visualizer, dt):
     packets_to_remove = []
@@ -106,9 +122,7 @@ def update_packets(visualizer, dt):
                 if 'trigger_tick' not in packet:
                     packet['trigger_tick'] = packet['arrival_tick'] + lag
                 if visualizer.master_tick < packet['trigger_tick']:
-
                     continue
-
 
             if (is_play_trigger_node and visualizer.is_playing and is_last_packet and
                     is_target_a_drop_node and preceding_was_not_respawn_node):
@@ -123,9 +137,10 @@ def update_packets(visualizer, dt):
             if respawn_origin and is_target_a_drop_node:
                 connected_to_origin = visualizer.get_connected_circles(respawn_origin)
                 if connected_to_origin:
-                    potential_targets = [c for c in connected_to_origin if c is not target_circle] or connected_to_origin
-                    new_target = random.choice(potential_targets)
-                    visualizer.create_packet(respawn_origin, new_target, current_time)
+                    # UPDATED: Use deterministic/locked routing
+                    new_target = _resolve_next_target(respawn_origin, target_circle, visualizer)
+                    if new_target:
+                        visualizer.create_packet(respawn_origin, new_target, current_time)
 
             notes_to_play = target_circle.get('merged_notes')
             if notes_to_play:
@@ -183,9 +198,10 @@ def update_packets(visualizer, dt):
             if not tc_a and tc_b:
                 connected = visualizer.get_connected_circles(target_circle)
                 if connected:
-                    potential_new_targets = [c for c in connected if c is not start_circle] or connected
-                    new_target = random.choice(potential_new_targets)
-                    visualizer.create_packet(target_circle, new_target, current_time)
+                    # UPDATED: Use deterministic/locked routing
+                    new_target = _resolve_next_target(target_circle, start_circle, visualizer)
+                    if new_target:
+                        visualizer.create_packet(target_circle, new_target, current_time)
 
             connected_circles = visualizer.get_connected_circles(target_circle)
             if not connected_circles:
@@ -194,8 +210,8 @@ def update_packets(visualizer, dt):
                     visualizer.active_packet_count -= 1
                 continue
 
-            potential_targets = [c for c in connected_circles if c is not start_circle] or connected_circles
-            next_target = random.choice(potential_targets)
+            # UPDATED: Use deterministic/locked routing instead of random.choice
+            next_target = _resolve_next_target(target_circle, start_circle, visualizer)
 
             if tc_a and tc_b:
                 nt_a = next_target.get('packet_state_a', False)
