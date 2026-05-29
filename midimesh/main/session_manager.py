@@ -17,7 +17,6 @@
             0.l .d,c      ,;o. o.k
             :cc;c:o        c;c:c:'
               ','            ...
-
 '''
 
 # Copyright (C) 2026 Emergent Properly
@@ -250,7 +249,8 @@ def _perform_final_save(visualizer, json_filename, png_filename, base_filename, 
             "is_merged": circle.get("is_merged", False),
             "merged_notes": circle.get("merged_notes", []),
             "strum_delay_ms": circle.get("strum_delay_ms", 0),
-            "lag_ticks": circle.get("lag_ticks", 0)
+            "lag_ticks": circle.get("lag_ticks", 0),
+            "locked_connection_index": circle.get("locked_connection_index", 0) # <-- SAVE NEW FIELD
         }
     save_data["circles"] = list(uniq_circles.values())
 
@@ -412,6 +412,7 @@ def load_session_from_file(visualizer, filename):
             circle["grid_locked"] = circle_data.get("grid_locked", False)
             circle["play_trigger"] = circle_data.get("play_trigger", False)
             circle["lag_ticks"] = circle_data.get("lag_ticks", 0)
+            circle["locked_connection_index"] = circle_data.get("locked_connection_index", 0) # <-- LOAD NEW FIELD
 
             if circle_data.get("is_merged", False):
                 circle["is_merged"] = True
