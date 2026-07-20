@@ -829,10 +829,11 @@ class MidiMesh(App):
             midi_mgr = None
             if self.main_app_widget and hasattr(self.main_app_widget.root_layout, 'visualizer'):
                 midi_mgr = self.main_app_widget.root_layout.visualizer.midi_out
+            visualizer_ref = self.main_app_widget.root_layout.visualizer if self.main_app_widget else None
             self.settings_menu_widget = SettingsMenu(
                 app_switcher=self.switch_to_widget,
                 midi_manager=midi_mgr,
-                visualizer=self.midi_visualizer
+                visualizer=visualizer_ref
             )
             self.root.add_widget(self.settings_menu_widget)
             self.current_widget_name = 'settings_menu'
