@@ -198,6 +198,21 @@ def update_packets(visualizer, dt):
             available_targets = [c for c in all_connections if c is not start_circle]
 
             if not available_targets:
+                # Dead end: route back to start circle instead of consuming
+                next_target = start_circle
+                x1, y1 = visualizer.get_circle_center(target_circle)
+                x2, y2 = visualizer.get_circle_center(next_target)
+                grid_size = visualizer.grid.grid_size
+                target_grid_x = int(round(x1 / grid_size))
+                target_grid_y = int(round(y1 / grid_size))
+                next_grid_x = int(round(x2 / grid_size))
+                next_grid_y = int(round(y2 / grid_size))
+                dx = abs(next_grid_x - target_grid_x)
+                dy = abs(next_grid_y - target_grid_y)
+                journey_duration = max(dx, dy)
+
+                visualizer.create_packet(target_circle, next_target, current_time, journey_duration_override=journey_duration)
+
                 if packet not in packets_to_remove:
                     packets_to_remove.append(packet)
                     visualizer.active_packet_count -= 1
