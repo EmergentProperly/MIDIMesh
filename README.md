@@ -15,9 +15,16 @@ Currently, the app has been tested on Android and Debian. However, I've attempte
 ## Android:
 
 
-Download the APK from the [Releases](https://github.com/EmergentProperly/MIDIMesh/releases) page and install on-device or via ADB.
+Download the APK from the [Releases](https://github.com/EmergentProperly/MIDIMesh/releases) page and install on-device or via ADB: 
 
-If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation for your build environment of choice..
+`#On linux, from the directory where the APK resides`
+
+`adb install midimesh-x.x.x.apk`
+
+`Where 'x.x.x' reflects the release version you are installing`
+
+
+If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation for your build environment of choice.
 
 
 ## To run out of the box on desktop:
@@ -59,29 +66,18 @@ On Debian systems, install the dependancies for python-rtmidi:
 
 
 
-
-
 ## ROADMAP (to 1.0):
 
 
-- Whittle away the monolithic modules
+- Whittle away the monolithic modules [In progress]
 
-- Clean up and replace some assets and improve usability
+- Clean up and replace some assets and improve usability [Pending]
 
-- Fix emergent bugs
+- Fix emergent bugs [In progress]
 
-- ~~Tackle the recently introduced 16kb pagefile requirement for submission to the Play Store~~ ~~(unlikely to do this if 3rd party development is killed off for Android, priority for this is significantly reduced for now)~~ Priority for both issues is currently low.
+- Upgrade python codebase to newer version (when necessary) [pending]
 
-- Look into semantic versioning requirements etc...
-
-- 1.0
-
-- F-Droid submssion (?)
-
-- ...
-
-- 2.0 to include inbuilt audio engine (synths, sampling, FX, etc)... possible shift in development towards an open source hardware device.
-
+Note: Progress slowed momentarily, but hasn't ceased. 
 
 ## Feedback:
 
