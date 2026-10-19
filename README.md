@@ -15,13 +15,13 @@ Currently, the app has been tested on Android and Debian. However, I've attempte
 ## Android:
 
 
-Download the APK from the [Releases](https://github.com/EmergentProperly/MIDIMesh/releases) page and install on-device or via ADB: 
+Download the APK from the [Releases](https://github.com/EmergentProperly/MIDIMesh/releases) page and install on-device or via ADB. 
 
-`#On linux, from the directory where the APK resides`
+On linux, from the directory where the APK resides:
 
 `adb install midimesh-x.x.x.apk`
 
-`Where 'x.x.x' reflects the release version you are installing`
+Where 'x.x.x' reflects the release version you are installing.
 
 
 If you're adventurous, feel free to build for Android using Buildozer (or p4a directly) using the relevant documentation for your build environment of choice.
