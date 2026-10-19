@@ -147,17 +147,16 @@ def update_packets(visualizer, dt):
                 strum_delay_ms = target_circle.get('strum_delay_ms', 0)
                 strum_delay_sec = strum_delay_ms / 1000.0
 
+                note_duration = max(target_circle['duration'], 0.1)
+
                 if strum_delay_sec <= 0:
                     for note, vel, ch in notes_to_play:
                         visualizer.send_midi_note(note, vel, channel=ch)
-
-                    if target_circle['duration'] > 0:
-                        for note, vel, ch in notes_to_play:
-                            Clock.schedule_once(
-                                lambda dt, n=note, ch=ch:
-                                visualizer.send_midi_note(n, 0, True, ch),
-                                target_circle['duration']
-                            )
+                        Clock.schedule_once(
+                            lambda dt, n=note, ch=ch:
+                            visualizer.send_midi_note(n, 0, True, ch),
+                            note_duration
+                        )
                 else:
                     for i, (note, vel, ch) in enumerate(notes_to_play):
                         delay_time = i * strum_delay_sec
@@ -166,25 +165,24 @@ def update_packets(visualizer, dt):
                             visualizer.send_midi_note(n, v, channel=c),
                             delay_time
                         )
-                        if target_circle['duration'] > 0:
-                            off_delay_time = delay_time + target_circle['duration']
-                            Clock.schedule_once(
-                                lambda dt, n=note, c=ch:
-                                visualizer.send_midi_note(n, 0, True, c),
-                                off_delay_time
-                            )
+                        Clock.schedule_once(
+                            lambda dt, n=note, c=ch:
+                            visualizer.send_midi_note(n, 0, True, c),
+                            delay_time + note_duration
+                        )
 
                 visualizer.flash_circle(target_circle)
             else:
                 visualizer.send_midi_note(target_circle['note'], target_circle['velocity'],
                                           channel=target_circle.get('midi_channel'))
-                if target_circle['duration'] > 0:
-                    Clock.schedule_once(
-                        lambda dt, n=target_circle['note'], ch=target_circle.get('midi_channel'):
-                        visualizer.send_midi_note(n, 0, True, ch),
-                        target_circle['duration']
-                    )
+                note_duration = max(target_circle['duration'], 0.1)
+                Clock.schedule_once(
+                    lambda dt, n=target_circle['note'], ch=target_circle.get('midi_channel'):
+                    visualizer.send_midi_note(n, 0, True, ch),
+                    note_duration
+                )
                 visualizer.flash_circle(target_circle)
+
 
             if is_target_a_drop_node:
                 if packet not in packets_to_remove:
@@ -195,23 +193,62 @@ def update_packets(visualizer, dt):
             if 'respawn_origin_circle' in packet:
                 del packet['respawn_origin_circle']
 
-            if not tc_a and tc_b:
-                connected = visualizer.get_connected_circles(target_circle)
-                if connected:
-                    # UPDATED: Use deterministic/locked routing
-                    new_target = _resolve_next_target(target_circle, start_circle, visualizer)
-                    if new_target:
-                        visualizer.create_packet(target_circle, new_target, current_time)
+            # Unified routing to ensure spawned and continuing packets take different paths
+            all_connections = visualizer.get_connected_circles(target_circle)
+            available_targets = [c for c in all_connections if c is not start_circle]
 
-            connected_circles = visualizer.get_connected_circles(target_circle)
-            if not connected_circles:
+            if not available_targets:
+                # Dead end: route back to start circle instead of consuming
+                next_target = start_circle
+                x1, y1 = visualizer.get_circle_center(target_circle)
+                x2, y2 = visualizer.get_circle_center(next_target)
+                grid_size = visualizer.grid.grid_size
+                target_grid_x = int(round(x1 / grid_size))
+                target_grid_y = int(round(y1 / grid_size))
+                next_grid_x = int(round(x2 / grid_size))
+                next_grid_y = int(round(y2 / grid_size))
+                dx = abs(next_grid_x - target_grid_x)
+                dy = abs(next_grid_y - target_grid_y)
+                journey_duration = max(dx, dy)
+
+                visualizer.create_packet(target_circle, next_target, current_time, journey_duration_override=journey_duration)
+
                 if packet not in packets_to_remove:
-                    packets_to_remove.append(packet) # Dead end.
+                    packets_to_remove.append(packet)
                     visualizer.active_packet_count -= 1
                 continue
 
-            # UPDATED: Use deterministic/locked routing instead of random.choice
-            next_target = _resolve_next_target(target_circle, start_circle, visualizer)
+            spawn_target = None
+            if not tc_a and tc_b and len(available_targets) >= 2:
+                # 2+ available targets: spawn to one, continuing to another
+                connection_mode = target_circle.get('connection_mode', 0)
+                locked_idx = target_circle.get('locked_connection_index', 0)
+
+                # Deterministic only if mode is 1 AND a valid lock index is set (>0)
+                is_deterministic = connection_mode == 1 and locked_idx > 0
+
+                if is_deterministic:
+                    spawn_idx = (locked_idx - 1) % len(available_targets)
+                    cont_idx = (locked_idx) % len(available_targets)
+                    spawn_target = available_targets[spawn_idx]
+                    next_target = available_targets[cont_idx]
+                    # Fallback if indices somehow collide
+                    if spawn_target is next_target:
+                        next_target = available_targets[(cont_idx + 1) % len(available_targets)]
+                else:
+                    # Random mode: shuffle targets to ensure unbiased selection of distinct pairs
+                    shuffled_targets = available_targets[:]
+                    random.shuffle(shuffled_targets)
+                    next_target = shuffled_targets[0]
+                    spawn_target = shuffled_targets[1]
+
+
+                visualizer.create_packet(target_circle, spawn_target, current_time)
+            else:
+                # 0 or 1 available target, or spawn condition not met
+                next_target = _resolve_next_target(target_circle, start_circle, visualizer)
+                spawn_target = None
+
 
             if tc_a and tc_b:
                 nt_a = next_target.get('packet_state_a', False)
