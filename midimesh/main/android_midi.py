@@ -119,10 +119,29 @@ else:
 
 
             def _get_devices(self):
-                if not self.midi_manager:
-                    Logger.error("AndroidMidi: MidiManager not available.")
+                if not self.midi_manager: return []
+                try:
+                    return self.midi_manager.getDevices()
+                except Exception:
                     return []
-                return self.midi_manager.getDevices()
+    
+            def get_host_devices(self):
+                if not self.midi_manager:
+                    return []
+                try:
+                    devices = self._get_devices()
+                    host_devices = []
+                    for dev_info in devices:
+                        if dev_info.getOutputPortCount() > 0:
+                            name = dev_info.getProperties().getString('name')
+                            host_devices.append((name, dev_info))
+                    return host_devices
+                except Exception as e:
+                    Logger.error(f"AndroidMidi: Error getting host devices: {e}")
+                    return []
+    
+            def get_connected_host_device_ids(self):
+                return list(self.midi_devices.keys())
 
             def set_connection_mode(self, mode):
                 if mode not in ('host', 'client'):
