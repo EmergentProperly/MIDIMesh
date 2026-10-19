@@ -69,11 +69,11 @@ On Debian systems, install the dependancies for python-rtmidi:
 ## ROADMAP (to 1.0):
 
 
-- Whittle away the monolithic modules [In progress]
+- Whittle away the monolithic modules [in progress]
 
-- Clean up and replace some assets and improve usability [Pending]
+- Clean up and replace some assets and improve usability [pending]
 
-- Fix emergent bugs [In progress]
+- Fix emergent bugs [in progress]
 
 - Upgrade python codebase to newer version (when necessary) [pending]
 
