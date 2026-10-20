@@ -82,6 +82,8 @@ class ControlNode(FloatLayout):
             self.dragging = True
             self.active = True
             touch.grab(self)
+            if self.index == 0:
+                self.control_panel._show_bpm_popup()
             return True
         return super().on_touch_down(touch)
 
@@ -103,5 +105,7 @@ class ControlNode(FloatLayout):
             self.dragging = False
             self.active = False
             touch.ungrab(self)
+            if self.index == 0:
+                self.control_panel._remove_bpm_popup()
             return True
         return super().on_touch_up(touch)
