@@ -397,6 +397,7 @@ class MidiVisualizer(Widget):
         self.active_touches = {}
         self._ctrl_pressed = False
         self._last_ctrl_clicked_circle = None
+        self._active_spawn_touches = {}  # Track active touches for persistent spawn coordinates
         Window.bind(on_key_down=self._on_key_down)
         Window.bind(on_key_up=self._on_key_up)
 
@@ -701,6 +702,9 @@ class MidiVisualizer(Widget):
                 self.android_midi.open_output()
                 self.midi_out = self.android_midi
                 midi_manager.midi_out = self.midi_out
+                self.android_midi.open_input(self._on_android_midi_input)
+                Logger.info("AndroidMidi: Input listener successfully registered.")
+
             except Exception as e:
                 Logger.error(f"FATAL: Error setting up Android MIDI: {e}")
 
@@ -759,6 +763,44 @@ class MidiVisualizer(Widget):
         elif msg_type == 0x80 or (msg_type == 0x90 and velocity == 0):
             if note in self.active_notes:
                 duration = time.time() - self.active_notes.pop(note)
+                # Store duration so packet routing can use it later
+                Clock.schedule_once(lambda dt: self.store_note_duration(note, duration), 0)
+                # Forward Note Off to MIDI OUT immediately to prevent stuck notes on external synths
+                if self.midi_out:
+                    self.send_midi_note(note, 0, note_off=True, channel=(status & 0x0F) + 1)
+
+
+    def _on_android_midi_input(self, msg_bytes, timestamp):
+        if len(msg_bytes) < 1:
+            return
+        try:
+            status = msg_bytes[0]
+            msg_type = status & 0xF0
+
+            if msg_type == 0x90 and len(msg_bytes) >= 3 and msg_bytes[2] > 0:
+                note = msg_bytes[1]
+                velocity = msg_bytes[2]
+                self.active_notes[note] = time.time()
+                if note not in getattr(self, '_pending_notes', {}):
+                    self._pending_notes = getattr(self, '_pending_notes', {})
+                    self._pending_notes[note] = velocity
+                    Clock.schedule_once(self._process_pending_notes, 0)
+
+            elif msg_type == 0x80 or (msg_type == 0x90 and len(msg_bytes) >= 3 and msg_bytes[2] == 0):
+                if len(msg_bytes) >= 2:
+                    note = msg_bytes[1]
+                    if note in self.active_notes:
+                        duration = time.time() - self.active_notes.pop(note)
+                        self.store_note_duration(note, duration)
+        except Exception as e:
+            Logger.error(f"AndroidMidi Input Parser Error: {e}")
+
+    def _process_pending_notes(self, dt):
+        pending = getattr(self, '_pending_notes', {})
+        self._pending_notes = {}
+        for note, velocity in pending.items():
+            self.create_circle(note, velocity)
+
 
     def handle_onscreen_midi(self, message_type, note, velocity):
         if message_type == 'note_on' and velocity > 0:
@@ -809,8 +851,15 @@ class MidiVisualizer(Widget):
         speed_x = random.uniform(-2, 2) * (velocity / 127.0 * 2)
         speed_y = random.uniform(-2, 2) * (velocity / 127.0 * 2)
 
+        # Default spawn position
         x = (self.width / 2) - (size / 2)
         y = (self.height / 1.5) - (size / 2)
+
+        # Use spawn target if a touch is currently active on the canvas
+        if hasattr(self, '_active_spawn_touches') and self._active_spawn_touches:
+            tx, ty = next(iter(self._active_spawn_touches.values()))
+            x = tx - size / 2
+            y = ty - size / 2
 
         is_grid_locked = False
         connection_mode = 0
@@ -1279,6 +1328,9 @@ class MidiVisualizer(Widget):
                         if hasattr(self, "_line_colour_map"):
                             self._line_colour_map.pop(line, None)
 
+                        # Clear spawn targets when interacting with connections
+                        if hasattr(self, '_active_spawn_touches'):
+                            self._active_spawn_touches.clear()
                         return True
 
             touch_on_circle = False
@@ -1290,6 +1342,9 @@ class MidiVisualizer(Widget):
                 )
                 if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
                     touch_on_circle = True
+                    # Clear spawn targets when interacting with circles
+                    if hasattr(self, '_active_spawn_touches'):
+                        self._active_spawn_touches.clear()
 
                     if self._ctrl_pressed:
                         self._pc_copy_circle = circle
@@ -1336,8 +1391,13 @@ class MidiVisualizer(Widget):
                     self._pc_copy_circle = None
                     return True
 
-        touch.ud['mv_bg_tap'] = True
-        return super().on_touch_down(touch, *args)
+                # Record background touch as a persistent spawn target while held
+                if hasattr(self, '_active_spawn_touches'):
+                    self._active_spawn_touches[touch.id] = (touch.x, touch.y)
+
+            touch.ud['mv_bg_tap'] = True
+            return super().on_touch_down(touch, *args)
+
 
     def is_point_on_line_segment(self, px, py, x1, y1, x2, y2, threshold=10):
         dx, dy = x2 - x1, y2 - y1
@@ -1366,6 +1426,10 @@ class MidiVisualizer(Widget):
 
     def on_touch_up(self, touch, *args):
         self.active_touches.pop(touch.id, None)
+        # Clear spawn coordinates when the touch is released
+        if hasattr(self, '_active_spawn_touches'):
+            self._active_spawn_touches.pop(touch.id, None)
+
         if touch.id == self._copy_touch_id:
             self._copy_source_circle = None
             self._copy_touch_id = None
@@ -1448,7 +1512,54 @@ class MidiVisualizer(Widget):
         self.packet_speed = new_packet_speed
         self.current_tick_duration = 50.0 / max(self.packet_speed, 1.0)
 
+    def _batch_process_midi(self, dt):
+        if not self.android_midi or not self.android_midi.midi_event_queue:
+            return
+
+        fps = Clock.get_fps()
+        if fps < self.android_midi._fps_threshold:
+            return
+        pending = []
+        while True:
+            try:
+                msg, ts = self.android_midi.midi_event_queue.get_nowait()
+                pending.append((msg, ts))
+            except:
+                break
+
+        if pending:
+            Clock.schedule_once(lambda dt, events=pending: self._handle_midi_batch(events), 0)
+
+    def _handle_midi_batch(self, events):
+        for msg, ts in events:
+            if len(msg) < 1: continue
+            try:
+                status = msg[0]
+                msg_type = status & 0xF0
+                if msg_type == 0x90 and len(msg) >= 3 and msg[2] > 0:
+                    note, vel = msg[1], msg[2]
+                    self.active_notes[note] = time.time()
+                    self.create_circle(note, vel)
+                elif msg_type in (0x80, 0x90) and len(msg) >= 3 and msg[2] == 0:
+                    if len(msg) >= 2 and msg[1] in self.active_notes:
+                        self.store_note_duration(msg[1], time.time() - self.active_notes.pop(msg[1]))
+            except Exception as e:
+                Logger.error(f"MidiBatch: {e}")
+
     def update(self, dt):
+        fps = Clock.get_fps()
+        if fps < 25:
+            self._skip_heavy_updates = True
+        else:
+            self._skip_heavy_updates = False
+
+        if not getattr(self, '_skip_heavy_updates', False):
+            self._batch_process_midi(dt)
+
+        if getattr(self, '_skip_heavy_updates', False):
+            self.update_packets(dt)
+            self.update_connections()
+            return
         if self.is_playing and self.current_tick_duration > 0:
             midi_clock_interval = self.current_tick_duration / 6.0
             self._time_since_last_midi_clock += dt
