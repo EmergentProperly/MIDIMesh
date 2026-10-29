@@ -41,10 +41,15 @@ from kivy.uix.widget import Widget
 from kivy.graphics import *
 from kivy.clock import Clock
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.properties import NumericProperty
 from kivy.core.window import Window
 from kivy.core.image import Image as CoreImage
 from kivy.resources import resource_find
+try:
+    from misc.animated_fonts import AnimatedLabel
+except ImportError:
+    AnimatedLabel = None
 
 
 from .nodes import ControlNode
@@ -86,6 +91,8 @@ class ControlPanel(FloatLayout):
         self._moving_node_spawn_interval = random.uniform(1.0, 3.0)
         self.horizontal_start = 40
         self.vertical_start = -55
+        self._bpm_popup = None
+        self._bpm_label = None
         self._cache_textures()
         MAX_POOL_SIZE = 30
         self.packet_pool = []
@@ -283,7 +290,9 @@ class ControlPanel(FloatLayout):
 
             if index == 0:
                 self.pending_packet_speed = 0 + normalized_value * 1000
+                self._update_bpm_value()
             elif index == 1:
+
                 self.visualizer.packet_life = 0 + normalized_value * 360
             elif index == 2:
                 self.visualizer.node_speed_multiplier = 0.0 + normalized_value * 2.0
@@ -296,6 +305,76 @@ class ControlPanel(FloatLayout):
                          'max_connection_distance', 'max_connections_per_node']:
                 setattr(self, prop, getattr(self.visualizer, prop))
 
+
+    def _show_bpm_popup(self):
+        if self._bpm_popup:
+            return
+
+        self._bpm_popup = AnchorLayout(
+            size_hint=(None, None),
+            size=(320, 160),
+            anchor_x='center',
+            anchor_y='center'
+        )
+
+        # Draw background relative to popup coordinates
+        with self._bpm_popup.canvas.before:
+            Color(0, 0, 0, 0.65)
+            self._bpm_bg = Rectangle(pos=(0, 0), size=self._bpm_popup.size)
+        self._bpm_popup.bind(pos=self._update_bg_pos, size=self._update_bg_pos)
+
+        # Set initial screen center
+        self._bpm_popup.center = (960, 640)
+
+        # Bind only to size changes (Window.pos is not bindable in Kivy)
+        self._bpm_bind_event = Window.bind(size=self._center_popup)
+
+        if AnimatedLabel:
+            self._bpm_label = AnimatedLabel(
+                text='BPM: --',
+                font_name='assets/Handwrite-01.ttf',
+                font_size='42px',
+                color=(1, 1, 1, 1),
+                halign='center',
+                valign='middle',
+                size_hint=(1, 1),
+                animation_interval=0.1
+            )
+            self._bpm_popup.add_widget(self._bpm_label)
+        else:
+            from kivy.uix.label import Label
+            self._bpm_label = Label(text='BPM: --', font_size='42', color=(1, 1, 1, 1), halign='center', valign='middle', size_hint=(1, 1))
+            self._bpm_popup.add_widget(self._bpm_label)
+
+        self.add_widget(self._bpm_popup)
+
+    def _update_bpm_value(self):
+        if not self._bpm_label:
+            return
+        bpm = int(self.pending_packet_speed * 0.3)
+        self._bpm_label.text = f'BPM: {bpm}'
+
+    def _center_popup(self, *args):
+        """Keep popup centered when window resizes"""
+        if self._bpm_popup:
+            self._bpm_popup.center = (Window.width / 2, Window.height / 2)
+
+    def _update_bg_pos(self, instance, value):
+        """Keep background rectangle synced with popup coordinates"""
+        if hasattr(self, '_bpm_bg'):
+            self._bpm_bg.pos = instance.pos
+            self._bpm_bg.size = instance.size
+
+    def _remove_bpm_popup(self):
+        if self._bpm_popup:
+            if self._bpm_popup in self.children:
+                self.remove_widget(self._bpm_popup)
+            # Clean up window bind to prevent memory leaks
+            if hasattr(self, '_bpm_bind_event') and self._bpm_bind_event:
+                self._bpm_bind_event.cancel()
+                self._bpm_bind_event = None
+            self._bpm_popup = None
+            self._bpm_label = None
 
     def create_packet_effect(self, start_node, end_node):
         for packet_obj in self.packet_pool:
