@@ -103,7 +103,7 @@ def update_packets(visualizer, dt):
             start_circle = packet['start_circle']
 
             _cx, _cy = visualizer.get_circle_center(target_circle)
-            packet['graphic'].pos = (_cx - 10, _cy - 10)
+            packet['graphic'].pos = (_cx - 20, _cy - 20)
 
             tc_a = target_circle.get('packet_state_a', False)
             tc_b = target_circle.get('packet_state_b', False)
@@ -218,6 +218,7 @@ def update_packets(visualizer, dt):
                     visualizer.active_packet_count -= 1
                 continue
 
+
             spawn_target = None
             if not tc_a and tc_b and len(available_targets) >= 2:
                 # 2+ available targets: spawn to one, continuing to another
@@ -279,7 +280,7 @@ def update_packets(visualizer, dt):
             x2, y2 = visualizer.get_circle_center(packet['target_circle'])
             packet_x = x1 + (x2 - x1) * progress
             packet_y = y1 + (y2 - y1) * progress
-            packet['graphic'].pos = (packet_x - 10, packet_y - 10)
+            packet['graphic'].pos = (packet_x - 20, packet_y - 20)
 
     for packet in packets_to_remove:
         if packet in visualizer.packets:
