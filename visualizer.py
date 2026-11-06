@@ -385,7 +385,7 @@ class MidiVisualizer(Widget):
         self.last_tempo_change_time = time.time()
         self.committed_ticks = 0
         self.current_tick_duration = 50.0 / max(self.packet_speed, 0)
-        self.connection_color = Color(0.4, 0.1, 0.0, 1.0)
+        self.connection_color = Color(0.7, 0.7, 0.7, 1.0)
         self.is_playing = False
         self._just_triggered = False
         self._time_since_last_midi_clock = 0.0
@@ -1233,7 +1233,7 @@ class MidiVisualizer(Widget):
         if not hasattr(self, "packet_texture"): self.packet_texture = CoreImage("assets/packet.png").texture
         with self.canvas:
             packet['color_instruction'] = Color(1, 1, 1, 1)
-            packet['graphic'] = Rectangle(texture=self.packet_texture, pos=(x1 - 10, y1 - 10), size=(20, 20))
+            packet['graphic'] = Rectangle(texture=self.packet_texture, pos=(x1 - 10, y1 - 10), size=(40, 40))
         self.packets.append(packet)
         self.active_packet_count += 1
         return packet
