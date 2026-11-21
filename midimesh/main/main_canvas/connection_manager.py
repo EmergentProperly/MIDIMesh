@@ -97,7 +97,6 @@ def update_connections(visualizer):
         pair_key = tuple(sorted((id(c1), id(c2))))
         active_connection_pairs.add(pair_key)
 
-    # CPU friendly grid based on max connection length
     cell_size = visualizer.max_connection_distance
     grid = {}
     for circle in visualizer.circles:
@@ -151,7 +150,6 @@ def update_connections(visualizer):
 
                     dist_sq = (x2 - x1)**2 + (y2 - y1)**2
 
-                    # Check squared distance first
                     if dist_sq < max_dist_sq:
                         if pair_key in active_connection_pairs:
                             continue
@@ -211,3 +209,6 @@ def update_connections(visualizer):
             visualizer.canvas.remove(packet.get('graphic'))
 
     visualizer.packets = alive_packets
+    visualizer.active_packet_count = sum(
+        1 for p in alive_packets if not p.get('is_fading')
+    )
