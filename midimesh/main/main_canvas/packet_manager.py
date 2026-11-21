@@ -72,7 +72,7 @@ def update_packets(visualizer, dt):
                 packet['color_instruction'].a = 1.0 - progress
             continue
 
-        if current_time - packet['creation_time'] > visualizer.packet_life:
+        if (current_time - packet['creation_time']) > (visualizer.packet_life):
             if packet not in packets_to_remove:
                 packets_to_remove.append(packet)
                 visualizer.active_packet_count -= 1
@@ -102,6 +102,13 @@ def update_packets(visualizer, dt):
             target_circle = packet['target_circle']
             start_circle = packet['start_circle']
 
+            if (visualizer.is_cycling and
+                    packet.get('arrival_tick', 0) >= getattr(visualizer, '_boundary_tick', float('inf'))):
+                if packet not in packets_to_remove:
+                    packets_to_remove.append(packet)
+                    visualizer.active_packet_count -= 1
+                continue
+
             _cx, _cy = visualizer.get_circle_center(target_circle)
             packet['graphic'].pos = (_cx - 20, _cy - 20)
 
@@ -127,6 +134,7 @@ def update_packets(visualizer, dt):
             if (is_play_trigger_node and visualizer.is_playing and is_last_packet and
                     is_target_a_drop_node and preceding_was_not_respawn_node):
                 visualizer.trigger_all_play_nodes()
+                visualizer._just_triggered = True
 
                 if packet not in packets_to_remove:
                     packets_to_remove.append(packet)
@@ -137,7 +145,6 @@ def update_packets(visualizer, dt):
             if respawn_origin and is_target_a_drop_node:
                 connected_to_origin = visualizer.get_connected_circles(respawn_origin)
                 if connected_to_origin:
-                    # UPDATED: Use deterministic/locked routing
                     new_target = _resolve_next_target(respawn_origin, target_circle, visualizer)
                     if new_target:
                         visualizer.create_packet(respawn_origin, new_target, current_time)
@@ -193,12 +200,10 @@ def update_packets(visualizer, dt):
             if 'respawn_origin_circle' in packet:
                 del packet['respawn_origin_circle']
 
-            # Unified routing to ensure spawned and continuing packets take different paths
             all_connections = visualizer.get_connected_circles(target_circle)
             available_targets = [c for c in all_connections if c is not start_circle]
 
             if not available_targets:
-                # Dead end: route back to start circle instead of consuming
                 next_target = start_circle
                 x1, y1 = visualizer.get_circle_center(target_circle)
                 x2, y2 = visualizer.get_circle_center(next_target)
@@ -221,11 +226,8 @@ def update_packets(visualizer, dt):
 
             spawn_target = None
             if not tc_a and tc_b and len(available_targets) >= 2:
-                # 2+ available targets: spawn to one, continuing to another
                 connection_mode = target_circle.get('connection_mode', 0)
                 locked_idx = target_circle.get('locked_connection_index', 0)
-
-                # Deterministic only if mode is 1 AND a valid lock index is set (>0)
                 is_deterministic = connection_mode == 1 and locked_idx > 0
 
                 if is_deterministic:
@@ -233,11 +235,9 @@ def update_packets(visualizer, dt):
                     cont_idx = (locked_idx) % len(available_targets)
                     spawn_target = available_targets[spawn_idx]
                     next_target = available_targets[cont_idx]
-                    # Fallback if indices somehow collide
                     if spawn_target is next_target:
                         next_target = available_targets[(cont_idx + 1) % len(available_targets)]
                 else:
-                    # Random mode: shuffle targets to ensure unbiased selection of distinct pairs
                     shuffled_targets = available_targets[:]
                     random.shuffle(shuffled_targets)
                     next_target = shuffled_targets[0]
@@ -246,7 +246,6 @@ def update_packets(visualizer, dt):
 
                 visualizer.create_packet(target_circle, spawn_target, current_time)
             else:
-                # 0 or 1 available target, or spawn condition not met
                 next_target = _resolve_next_target(target_circle, start_circle, visualizer)
                 spawn_target = None
 
@@ -286,10 +285,23 @@ def update_packets(visualizer, dt):
         if packet in visualizer.packets:
             visualizer.packets.remove(packet)
             if packet.get('graphic'):
-                if packet.get('color_instruction') in visualizer.canvas.children:
+                try:
                     visualizer.canvas.remove(packet.get('color_instruction'))
-                if packet.get('graphic') in visualizer.canvas.children:
+                except ValueError:
+                    pass
+                try:
                     visualizer.canvas.remove(packet.get('graphic'))
+                except ValueError:
+                    pass
 
-    if not visualizer._hard_reset_running and len(visualizer.packets) >= visualizer.max_packets:
-        visualizer._trigger_hard_reset()
+    if len(visualizer.packets) >= visualizer.max_packets:
+        if visualizer.is_cycling and not visualizer._hard_reset_running:
+            living = [p for p in visualizer.packets if not p.get('is_fading')]
+            overflow = len(living) - visualizer.max_packets // 2
+            for packet in living[:max(overflow, 1)]:
+                packet['is_fading'] = True
+                packet['fade_duration'] = 0.01
+                packet['fade_timer'] = 0.0
+                visualizer.active_packet_count -= 1
+        elif not visualizer._hard_reset_running:
+            visualizer._trigger_hard_reset()
