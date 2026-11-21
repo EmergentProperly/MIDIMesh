@@ -1,3 +1,40 @@
+'''
+                      .,,
+                    l;:;c::
+                   ,:o. d.O
+                    c:c;c:'
+       .c:::c.        0.k
+      'o,c'l.k        0.x
+      .x'c,c.d,       0.x
+        ;;;:cc:l;     0.d         ;;;;:
+              :l:cc.  O.x        k'c,:'x.
+                'lc:lcx 0.  .;::c,.o'c;o'
+                   d:.:,:,cllc:::;c;;;c'
+                   ,o::.d.x;.
+                   lc'loc.O.
+              .,'cl;o, ..lc:o,'.
+            :cc:c.ll      'x :,::;
+            0.l .d,c      ,;o. o.k
+            :cc;c:o        c;c:c:'
+              ','            ...
+
+'''
+
+# Copyright (C) 2026 Emergent Properly
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import os
 import logging
 import sys
@@ -145,9 +182,14 @@ class PlayPauseButton(ButtonBehavior, Image):
         if self.play_state == 'pause':
             self.play_state = 'play'; self.visualizer.is_playing = True
             if self.midi_clock_armed: self.visualizer.send_midi_transport(0xFA)
+            self.visualizer.start_playback()
             self.visualizer.trigger_all_play_nodes()
         else:
             self.play_state = 'pause'; self.visualizer.is_playing = False
+            if self.midi_clock_armed: self.visualizer.send_midi_transport(0xFC)
+            self.visualizer.kill_all_packets()
+            if self.visualizer.is_cycling:
+                self.visualizer.stop_pattern_cycling()
             if self.midi_clock_armed: self.visualizer.send_midi_transport(0xFC)
             self.visualizer.kill_all_packets()
         self._update_source_image()
@@ -338,9 +380,21 @@ class ResetButton(ButtonBehavior, Image):
 class MidiVisualizer(Widget):
     use_boundaries = BooleanProperty(True)
     _midi_initialized = False
+    # Cycle Patterns properties
+    cycle_patterns = ListProperty([])
+    cycle_index = NumericProperty(0)
+    cycle_ticks_per_pattern = NumericProperty(64)
+    cycle_elapsed_time = NumericProperty(0.0)
+    is_cycling = BooleanProperty(False)
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._copy_source_circle = None
+        # Cycle Patterns initialization
+        self.cycle_patterns = []
+        self.cycle_index = 0
+        self.cycle_ticks_per_pattern = 64
+        self.cycle_elapsed_time = 0.0
+        self.is_cycling = False
         self._copy_touch_id = None
         self._pc_copy_circle = None
         self.control_panel_ref = None
@@ -384,8 +438,11 @@ class MidiVisualizer(Widget):
         self.show_duplicate = self._show_duplicate
         self.last_tempo_change_time = time.time()
         self.committed_ticks = 0
+        self.master_tick = 0
+        self.tick_progress = 0.0
         self.current_tick_duration = 50.0 / max(self.packet_speed, 0)
         self.connection_color = Color(0.7, 0.7, 0.7, 1.0)
+        self._connection_color_index = 0
         self.is_playing = False
         self._just_triggered = False
         self._time_since_last_midi_clock = 0.0
@@ -397,9 +454,17 @@ class MidiVisualizer(Widget):
         self.active_touches = {}
         self._ctrl_pressed = False
         self._last_ctrl_clicked_circle = None
-        self._active_spawn_touches = {}  # Track active touches for persistent spawn coordinates
+        self._active_spawn_touches = {}
         Window.bind(on_key_down=self._on_key_down)
         Window.bind(on_key_up=self._on_key_up)
+
+        Clock.schedule_interval(self._log_health, 10.0)
+
+    def _log_health(self, dt):
+        print(f"[HEALTH] fps={Clock.get_fps():.0f} packets={len(self.packets)} "
+              f"count={self.active_packet_count} circles={len(self.circles)} "
+              f"conns={len(self.connection_data)} playing={self.is_playing} "
+              f"cycling={self.is_cycling} tick={self.master_tick}")
 
     def send_panic(self):
         if not self.midi_out:
@@ -555,13 +620,17 @@ class MidiVisualizer(Widget):
             )
 
     def update_connections(self):
-        if self.connection_color not in self.canvas.before.children:
+        if self._connection_color_index != 0:
+            if self.connection_color in self.canvas.before.children:
+                self.canvas.before.remove(self.connection_color)
             self.canvas.before.insert(0, self.connection_color)
-        elif self.canvas.before.children.index(self.connection_color) != 0:
-            self.canvas.before.remove(self.connection_color)
+            self._connection_color_index = 0
+        elif self.connection_color not in self.canvas.before.children:
             self.canvas.before.insert(0, self.connection_color)
+            self._connection_color_index = 0
 
         connection_manager.update_connections(self)
+
 
     def calculate_connection_probability(self, distance, max_distance=800):
         probability = 1.0 - (distance / max_distance)
@@ -583,18 +652,15 @@ class MidiVisualizer(Widget):
         if not connected:
             return None
 
-        # Stable ordering by position so index 1,2,3... always maps to the same physical node
         connected_sorted = sorted(connected, key=lambda c: (c['pos'][0], c['pos'][1]))
         total_connections = len(connected_sorted)
 
         locked_idx = current_node.get('locked_connection_index', 0)
 
         if locked_idx > 0 and current_node.get('connection_mode', 0) == 1:
-            # Locked mode: ignore previous node filter, map index directly
             target_idx = (locked_idx - 1) % total_connections
             return connected_sorted[target_idx]
         else:
-            # Random mode: exclude previous node to prevent immediate backtracking
             potential = [c for c in connected_sorted if c is not previous_node]
             return random.choice(potential) if potential else connected_sorted[0]
 
@@ -763,9 +829,7 @@ class MidiVisualizer(Widget):
         elif msg_type == 0x80 or (msg_type == 0x90 and velocity == 0):
             if note in self.active_notes:
                 duration = time.time() - self.active_notes.pop(note)
-                # Store duration so packet routing can use it later
                 Clock.schedule_once(lambda dt: self.store_note_duration(note, duration), 0)
-                # Forward Note Off to MIDI OUT immediately to prevent stuck notes on external synths
                 if self.midi_out:
                     self.send_midi_note(note, 0, note_off=True, channel=(status & 0x0F) + 1)
 
@@ -843,7 +907,7 @@ class MidiVisualizer(Widget):
         hue = (((channel - 1) % 16) / 16.0 + 0.55) % 1.0
         return (hue, 0.5, 1)
 
-    def create_circle(self, note, velocity, circle_id=None, midi_channel=None):
+    def create_circle(self, note, velocity, circle_id=None, midi_channel=None, ui_feedback=True):
         tile_index = note % 12
         animation_frames = self.circle_animations.get(tile_index, self.circle_animations.get(0))
         if not animation_frames: return
@@ -851,11 +915,9 @@ class MidiVisualizer(Widget):
         speed_x = random.uniform(-2, 2) * (velocity / 127.0 * 2)
         speed_y = random.uniform(-2, 2) * (velocity / 127.0 * 2)
 
-        # Default spawn position
         x = (self.width / 2) - (size / 2)
         y = (self.height / 1.5) - (size / 2)
 
-        # Use spawn target if a touch is currently active on the canvas
         if hasattr(self, '_active_spawn_touches') and self._active_spawn_touches:
             tx, ty = next(iter(self._active_spawn_touches.values()))
             x = tx - size / 2
@@ -898,13 +960,14 @@ class MidiVisualizer(Widget):
             circle['rect'] = Rectangle(texture=animation_frames[0], pos=circle['pos'], size=(size, size))
 
         self.circles.append(circle)
-        self.show_duplicate(circle)
-        circle['_dup_ref'] = self._current_dup
-        self._select_circle(circle)
+        if ui_feedback:
+            self.show_duplicate(circle)
+            circle['_dup_ref'] = self._current_dup
+            self._select_circle(circle)
 
-        app = App.get_running_app()
-        if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
-            app.guided_tour_overlay.on_shape_created()
+            app = App.get_running_app()
+            if hasattr(app, 'guided_tour_overlay') and app.guided_tour_overlay:
+                app.guided_tour_overlay.on_shape_created()
 
 
         if not self._hard_reset_running and len(self.circles) >= self.max_circles:
@@ -1072,6 +1135,8 @@ class MidiVisualizer(Widget):
             self.grid.visible = circle.get('grid_locked', False)
         else:
             if self._current_dup and self._dup_parent:
+                if getattr(self._current_dup, '_anim_event', None):
+                    self._current_dup._anim_event.cancel()
                 if self._current_dup in self._dup_parent.children:
                     self._dup_parent.remove_widget(self._current_dup)
                 self._current_dup = None
@@ -1119,6 +1184,8 @@ class MidiVisualizer(Widget):
                 self.canvas.after.remove(circle['rect'])
 
         if '_dup_ref' in circle and circle['_dup_ref'] in self._dup_parent.children:
+            if getattr(circle['_dup_ref'], '_anim_event', None):
+                circle['_dup_ref']._anim_event.cancel()
             self._dup_parent.remove_widget(circle['_dup_ref'])
             self._current_dup = None
 
@@ -1248,7 +1315,6 @@ class MidiVisualizer(Widget):
                 packet['is_fading'] = True
                 packet['fade_duration'] = 0.01
                 packet['fade_timer'] = 0.0
-                self.active_packet_count -= 1
 
     def _on_key_down(self, window, key, scancode, codepoint, modifiers):
         if 'ctrl' in modifiers:
@@ -1328,7 +1394,6 @@ class MidiVisualizer(Widget):
                         if hasattr(self, "_line_colour_map"):
                             self._line_colour_map.pop(line, None)
 
-                        # Clear spawn targets when interacting with connections
                         if hasattr(self, '_active_spawn_touches'):
                             self._active_spawn_touches.clear()
                         return True
@@ -1342,7 +1407,6 @@ class MidiVisualizer(Widget):
                 )
                 if (touch.x - cx) ** 2 + (touch.y - cy) ** 2 <= r ** 2:
                     touch_on_circle = True
-                    # Clear spawn targets when interacting with circles
                     if hasattr(self, '_active_spawn_touches'):
                         self._active_spawn_touches.clear()
 
@@ -1391,7 +1455,6 @@ class MidiVisualizer(Widget):
                     self._pc_copy_circle = None
                     return True
 
-                # Record background touch as a persistent spawn target while held
                 if hasattr(self, '_active_spawn_touches'):
                     self._active_spawn_touches[touch.id] = (touch.x, touch.y)
 
@@ -1426,7 +1489,6 @@ class MidiVisualizer(Widget):
 
     def on_touch_up(self, touch, *args):
         self.active_touches.pop(touch.id, None)
-        # Clear spawn coordinates when the touch is released
         if hasattr(self, '_active_spawn_touches'):
             self._active_spawn_touches.pop(touch.id, None)
 
@@ -1504,6 +1566,12 @@ class MidiVisualizer(Widget):
         new_y = max(0, min(snapped_cy - size/2, self.height - size))
         circle['pos'] = (new_x, new_y)
 
+    def _sync_circle_rects(self):
+        for circle in self.circles:
+            if 'rect' in circle:
+                circle['rect'].pos = circle['pos']
+                circle['rect'].size = (circle['size'], circle['size'])
+
     def update_tempo(self, new_packet_speed):
         elapsed_time = time.time() - self.last_tempo_change_time
         if self.current_tick_duration > 0:
@@ -1511,6 +1579,15 @@ class MidiVisualizer(Widget):
         self.last_tempo_change_time = time.time()
         self.packet_speed = new_packet_speed
         self.current_tick_duration = 50.0 / max(self.packet_speed, 1.0)
+
+    def start_playback(self):
+        self.last_tempo_change_time = time.time()
+        self.committed_ticks = self.master_tick
+        self.master_tick = self.committed_ticks
+        self.tick_progress = 0.0
+        self._time_since_last_midi_clock = 0.0
+        self._time_since_last_quarter_note = 0.0
+
 
     def _batch_process_midi(self, dt):
         if not self.android_midi or not self.android_midi.midi_event_queue:
@@ -1546,12 +1623,71 @@ class MidiVisualizer(Widget):
             except Exception as e:
                 Logger.error(f"MidiBatch: {e}")
 
+    def start_pattern_cycling(self, patterns, ticks_per_pattern):
+        self.stop_pattern_cycling()
+        self.cycle_patterns = patterns
+        self.cycle_index = 0
+        self.cycle_ticks_per_pattern = ticks_per_pattern
+        self.cycle_elapsed_time = 0.0
+        self.is_cycling = True
+
+        # Preload all patterns into memory immediately
+        self.cycle_patterns_data = session_manager.preload_cycle_patterns(patterns)
+
+        # Apply the first pattern instantly
+        if self.cycle_patterns_data and self.cycle_patterns_data[0] is not None:
+            session_manager._apply_session_data(self, self.cycle_patterns_data[0])
+        self._cycle_start_tick = self.master_tick
+
+    def stop_pattern_cycling(self):
+        self.is_cycling = False
+        self.cycle_patterns = []
+        self.cycle_patterns_data = []
+        self.cycle_index = 0
+        self.cycle_elapsed_time = 0.0
+
+    def _update_cycle(self, dt):
+        if not self.is_cycling or not self.cycle_patterns:
+            return
+
+        self._boundary_tick = getattr(self, '_cycle_start_tick', 0) + self.cycle_ticks_per_pattern
+
+        if self.is_playing:
+            start_tick = getattr(self, '_cycle_start_tick', 0)
+            if self.master_tick - start_tick >= self.cycle_ticks_per_pattern:
+                self.cycle_index = (self.cycle_index + 1) % len(self.cycle_patterns)
+                if getattr(self, '_hard_reset_running', False):
+                    self._cycle_start_tick = self.master_tick
+                    return
+                data = None
+                if getattr(self, 'cycle_patterns_data', None):
+                    data = self.cycle_patterns_data[self.cycle_index]
+                _t0 = time.perf_counter()
+                if data is not None:
+                    session_manager._apply_session_data(self, data)
+                else:
+                    session_manager.load_session_from_file(self, self.cycle_patterns[self.cycle_index])
+                Logger.info(f"[CYCLE] apply took {(time.perf_counter() - _t0) * 1000:.1f}ms "
+                            f"(tick={self.master_tick})")
+                self._cycle_start_tick = self.master_tick
+        else:
+            self._cycle_start_tick = self.master_tick
+
+
+
     def update(self, dt):
+        self._update_cycle(dt)
         fps = Clock.get_fps()
         if fps < 25:
             self._skip_heavy_updates = True
         else:
             self._skip_heavy_updates = False
+
+        if self.current_tick_duration > 0:
+            elapsed_since_change = time.time() - self.last_tempo_change_time
+            new_ticks = int(elapsed_since_change / self.current_tick_duration)
+            self.master_tick = self.committed_ticks + new_ticks
+            self.tick_progress = (elapsed_since_change % self.current_tick_duration) / self.current_tick_duration
 
         if not getattr(self, '_skip_heavy_updates', False):
             self._batch_process_midi(dt)
@@ -1559,7 +1695,18 @@ class MidiVisualizer(Widget):
         if getattr(self, '_skip_heavy_updates', False):
             self.update_packets(dt)
             self.update_connections()
+            if self.is_playing and self.current_tick_duration > 0:
+                midi_clock_interval = self.current_tick_duration / 6.0
+                self._time_since_last_midi_clock += dt
+                while self._time_since_last_midi_clock >= midi_clock_interval:
+                    self.send_midi_transport(0xF8)
+                    self._time_since_last_midi_clock -= midi_clock_interval
+            if self.is_playing and not self.packets and not self._just_triggered:
+                self.trigger_all_play_nodes()
+                self._just_triggered = True
+            self._sync_circle_rects()
             return
+
         if self.is_playing and self.current_tick_duration > 0:
             midi_clock_interval = self.current_tick_duration / 6.0
             self._time_since_last_midi_clock += dt
@@ -1592,11 +1739,6 @@ class MidiVisualizer(Widget):
             self.trigger_all_play_nodes()
             self._just_triggered = True
 
-        if self.current_tick_duration > 0:
-            elapsed_since_change = time.time() - self.last_tempo_change_time
-            new_ticks = int(elapsed_since_change / self.current_tick_duration)
-            self.master_tick = self.committed_ticks + new_ticks
-            self.tick_progress = (elapsed_since_change % self.current_tick_duration) / self.current_tick_duration
         self.update_connections()
         self.update_packets(dt)
 
@@ -1704,15 +1846,17 @@ class MidiVisualizer(Widget):
             self._update_selection_rect(None)
             self.last_selected_circle = None
             self.packets.clear(); self.connection_data.clear(); self.all_connections.clear()
+            self.active_packet_count = 0
             self.circle_id_to_circle.clear(); self.circles.clear(); self._line_colour_map.clear()
             self._current_dup, self._dup_parent = None, None
-            self.is_playing = False
             self._just_triggered = False
-            root_layout = self.root_layout_ref
-            if root_layout and hasattr(root_layout, 'play_pause_button'):
-                play_pause_button = root_layout.play_pause_button
-                play_pause_button.play_state = 'pause'
-                play_pause_button.source = 'assets/pause.png'
+            if not self.is_cycling:
+                self.is_playing = False
+                root_layout = self.root_layout_ref
+                if root_layout and hasattr(root_layout, 'play_pause_button'):
+                    play_pause_button = root_layout.play_pause_button
+                    play_pause_button.play_state = 'pause'
+                    play_pause_button.source = 'assets/pause.png'
             Clock.unschedule(self._reset_step)
             if hasattr(self, "_reset_finished_cb") and callable(self._reset_finished_cb):
                 try: self._reset_finished_cb()
